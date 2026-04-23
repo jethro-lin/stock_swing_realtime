@@ -1665,6 +1665,21 @@ RIGHT = {"收盤","漲跌幅(%)","成交量(張)","命中數","訊號次數",
          "勝率(%)","平均獲利(%)","平均虧損(%)","期望值(%)",
          "最大單筆虧損(%)","停損觸發(%)"}
 
+def _wrap_header(text: str, width: int) -> list:
+    """將標題文字切成每行最多 width 顯示寬度的多行清單。"""
+    lines, cur, cur_w = [], "", 0
+    for ch in text:
+        ch_w = _dw(ch)
+        if cur_w + ch_w > width:
+            lines.append(cur)
+            cur, cur_w = ch, ch_w
+        else:
+            cur += ch
+            cur_w += ch_w
+    if cur:
+        lines.append(cur)
+    return lines or [""]
+
 def print_table(df: pd.DataFrame, cols: list, title: str = ""):
     if title:
         print(f"\n  {title}")
@@ -1672,13 +1687,26 @@ def print_table(df: pd.DataFrame, cols: list, title: str = ""):
     for col in cols:
         if col not in df.columns:
             continue
-        widths[col] = max(_dw(str(col)),
-                          max((_dw(str(v)) for v in df[col]), default=0)) + 1
+        # 欄寬只由「資料」決定，標題過長時自動換行 —— 最小 3 避免太窄
+        data_w = max((_dw(str(v)) for v in df[col]), default=0)
+        widths[col] = max(data_w + 1, 3)
     cols = [c for c in cols if c in widths]
-    header = "  " + " ".join(_pad(c, widths[c], "right" if c in RIGHT else "left")
-                              for c in cols)
-    sep    = "  " + "─" * (sum(widths.values()) + len(cols))
-    print(header)
+
+    # 建立多行標題
+    wrapped = [_wrap_header(c, widths[c]) for c in cols]
+    n_lines = max(len(w) for w in wrapped)
+    # 短標題補空行至頂端對齊
+    for w in wrapped:
+        while len(w) < n_lines:
+            w.insert(0, "")
+
+    for i in range(n_lines):
+        print("  " + " ".join(
+            _pad(wrapped[j][i], widths[c], "right" if c in RIGHT else "left")
+            for j, c in enumerate(cols)
+        ))
+
+    sep = "  " + "─" * (sum(widths.values()) + len(cols))
     print(sep)
     for _, row in df.iterrows():
         line = "  " + " ".join(
