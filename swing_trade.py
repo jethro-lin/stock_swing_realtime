@@ -2051,10 +2051,10 @@ def main():
 
     # ── 資料來源 ──────────────────────────────────
     src_group = parser.add_argument_group("資料來源")
-    src_group.add_argument("--datasource", type=str, default="yfinance",
+    src_group.add_argument("--datasource", type=str, default="sinopac",
                            choices=["yfinance", "sinopac"],
-                           help="行情資料來源：yfinance（預設，免帳號）"
-                                " 或 sinopac（永豐金，盤後 5 分鐘即更新，需帳號）")
+                           help="行情資料來源：sinopac（預設，永豐金，盤後 5 分鐘即更新，需帳號）"
+                                " 或 yfinance（免帳號）")
     src_group.add_argument("--sj-api-key",    type=str, default=None,
                            metavar="KEY",
                            help="永豐金 API Key（亦可設環境變數 SJ_API_KEY）")
