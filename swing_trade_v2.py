@@ -812,8 +812,8 @@ def fetch_data_sinopac(codes: list, days: int,
     # ── Step 2：kbars 下載歷史日K（並行） ────────────────────────
     print(f"  📥 [1/2] 永豐金 kbars 下載歷史日K（{start_str} ~ {end_str}）...")
     if _market_open:
-        print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，盤中執行"
-              f"——歷史資料截至昨日，今日訊號僅供參考")
+        print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，尚未收盤"
+              f"——以昨日（{hist_end}）收盤資料選股")
 
     results: dict = {}
     fallback_codes: list = []
@@ -918,88 +918,91 @@ def fetch_data_sinopac(codes: list, days: int,
         print("  ❌ 無法取得任何股票資料")
         return {}
 
-    # ── Step 4：snapshots 補上今日收盤 ────────────────────────────
-    print(f"  📡 [2/2] 永豐金 snapshots 補上今日 OHLCV...")
-
-    contracts, c2code = [], {}
-    for code in list(results.keys()):
-        c = _get_contract(code)
-        if c is not None:
-            contracts.append(c)
-            c2code[c.code] = code
-
-    if contracts:
-        updated     = 0
-        zero_vol    = 0
-        stale_codes: list = []
-
-        for bi in range(0, len(contracts), 200):
-            batch = contracts[bi:bi+200]
-            try:
-                snaps = api.snapshots(batch)
-                for snap in snaps:
-                    code = c2code.get(snap.code, snap.code)
-                    if code not in results:
-                        continue
-                    close = float(snap.close)
-                    if close <= 0:
-                        continue
-
-                    # 從 snap.ts（奈秒）取得資料的實際日期
-                    snap_ts = getattr(snap, "ts", None)
-                    if snap_ts and snap_ts > 0:
-                        snap_date = datetime.datetime.fromtimestamp(
-                            snap_ts / 1e9, tz=_tz_tw
-                        ).date()
-                    else:
-                        snap_date = _today_tw
-
-                    if snap_date != _today_tw:
-                        stale_codes.append(
-                            f"{code}（snap={snap_date}, 今日={_today_tw}）"
-                        )
-
-                    # snap.total_volume = 當日累計總量（張）← 正確欄位
-                    tv    = float(snap.total_volume) if snap.total_volume else 0.0
-                    lv    = float(snap.volume)       if snap.volume       else 0.0
-                    vol_k = tv or lv
-
-                    if vol_k <= 0:
-                        zero_vol += 1
-                        continue
-
-                    today_bar = pd.DataFrame({
-                        "Open":   [float(snap.open)],
-                        "High":   [float(snap.high)],
-                        "Low":    [float(snap.low)],
-                        "Close":  [close],
-                        "Vol_K":  [vol_k],
-                        "Volume": [vol_k * 1000],
-                    }, index=[pd.Timestamp(snap_date)])
-
-                    df = results[code]
-                    # 同日期的 kbars 舊資料替換成 snapshot 即時值
-                    if len(df) > 0 and df.index[-1].date() == snap_date:
-                        df = df.iloc[:-1]
-                    results[code] = pd.concat([df, today_bar])
-                    updated += 1
-            except Exception as e:
-                print(f"  ⚠️  snapshots 批次失敗：{e}")
-
-        status = "盤中即時" if _market_open else "今日收盤"
-        print(f"  ✅ 永豐金 {status} 更新：{updated}/{len(contracts)} 檔"
-              f"  （零成交量跳過：{zero_vol} 檔）")
-
-        if stale_codes:
-            print(f"\n  ⚠️  【資料日期異常】以下 {len(stale_codes)} 檔 snapshot 日期"
-                  f"與今日（{_today_tw}）不符，訊號可能基於昨日舊資料：")
-            for s in stale_codes[:10]:
-                print(f"     • {s}")
-            if len(stale_codes) > 10:
-                print(f"     ...（共 {len(stale_codes)} 檔）")
-            print(f"  💡 建議：收盤後 5 分鐘再執行，或等盤後 snapshot 更新完畢")
+    # ── Step 4：snapshots 補上今日收盤（盤後才執行）──────────────
+    if _market_open:
+        # 盤中：kbars 已截至昨日，訊號以昨日為準，不取今日不完整資料
+        print(f"  ⏸  [2/2] 盤中跳過 snapshot，以昨日（{hist_end}）收盤作為選股基準")
     else:
-        print(f"  ⚠️  找不到可用合約，跳過今日更新")
+        print(f"  📡 [2/2] 永豐金 snapshots 補上今日 OHLCV...")
+
+        contracts, c2code = [], {}
+        for code in list(results.keys()):
+            c = _get_contract(code)
+            if c is not None:
+                contracts.append(c)
+                c2code[c.code] = code
+
+        if contracts:
+            updated     = 0
+            zero_vol    = 0
+            stale_codes: list = []
+
+            for bi in range(0, len(contracts), 200):
+                batch = contracts[bi:bi+200]
+                try:
+                    snaps = api.snapshots(batch)
+                    for snap in snaps:
+                        code = c2code.get(snap.code, snap.code)
+                        if code not in results:
+                            continue
+                        close = float(snap.close)
+                        if close <= 0:
+                            continue
+
+                        # 從 snap.ts（奈秒）取得資料的實際日期
+                        snap_ts = getattr(snap, "ts", None)
+                        if snap_ts and snap_ts > 0:
+                            snap_date = datetime.datetime.fromtimestamp(
+                                snap_ts / 1e9, tz=_tz_tw
+                            ).date()
+                        else:
+                            snap_date = _today_tw
+
+                        if snap_date != _today_tw:
+                            stale_codes.append(
+                                f"{code}（snap={snap_date}, 今日={_today_tw}）"
+                            )
+
+                        # snap.total_volume = 當日累計總量（張）← 正確欄位
+                        tv    = float(snap.total_volume) if snap.total_volume else 0.0
+                        lv    = float(snap.volume)       if snap.volume       else 0.0
+                        vol_k = tv or lv
+
+                        if vol_k <= 0:
+                            zero_vol += 1
+                            continue
+
+                        today_bar = pd.DataFrame({
+                            "Open":   [float(snap.open)],
+                            "High":   [float(snap.high)],
+                            "Low":    [float(snap.low)],
+                            "Close":  [close],
+                            "Vol_K":  [vol_k],
+                            "Volume": [vol_k * 1000],
+                        }, index=[pd.Timestamp(snap_date)])
+
+                        df = results[code]
+                        # 同日期的 kbars 舊資料替換成 snapshot 即時值
+                        if len(df) > 0 and df.index[-1].date() == snap_date:
+                            df = df.iloc[:-1]
+                        results[code] = pd.concat([df, today_bar])
+                        updated += 1
+                except Exception as e:
+                    print(f"  ⚠️  snapshots 批次失敗：{e}")
+
+            print(f"  ✅ 永豐金今日收盤更新：{updated}/{len(contracts)} 檔"
+                  f"  （零成交量跳過：{zero_vol} 檔）")
+
+            if stale_codes:
+                print(f"\n  ⚠️  【資料日期異常】以下 {len(stale_codes)} 檔 snapshot 日期"
+                      f"與今日（{_today_tw}）不符，訊號可能基於昨日舊資料：")
+                for s in stale_codes[:10]:
+                    print(f"     • {s}")
+                if len(stale_codes) > 10:
+                    print(f"     ...（共 {len(stale_codes)} 檔）")
+                print(f"  💡 建議：收盤後 5 分鐘再執行，或等盤後 snapshot 更新完畢")
+        else:
+            print(f"  ⚠️  找不到可用合約，跳過今日更新")
 
     try:
         api.logout()
