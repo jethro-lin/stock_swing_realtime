@@ -635,6 +635,7 @@ def fetch_data_sinopac(codes: list, days: int,
             # ── 分批取 snapshots（每批最多 200）─────────────────
             updated    = 0
             zero_vol   = 0   # total_volume=0 的筆數（保留 yfinance）
+            stale_codes = []  # snapshot 日期與今日不符的股票
             ratio_list = []  # (code, yf_vol, sj_vol) 量比記錄
 
             for bi in range(0, len(contracts), 200):
@@ -648,6 +649,21 @@ def fetch_data_sinopac(codes: list, days: int,
                         close = float(snap.close)
                         if close <= 0:
                             continue
+
+                        # ── 從 snap.ts 取出 snapshot 的實際資料日期 ──────────
+                        snap_ts = getattr(snap, "ts", None)
+                        if snap_ts and snap_ts > 0:
+                            snap_date = datetime.datetime.fromtimestamp(
+                                snap_ts / 1e9, tz=_tz_tw
+                            ).date()
+                        else:
+                            snap_date = _today_tw  # 無 ts 欄位時退回今日
+
+                        # 記錄資料日期與執行日不符的股票（可能是昨日舊資料）
+                        if snap_date != _today_tw:
+                            stale_codes.append(
+                                f"{code}（snap={snap_date}, 今日={_today_tw}）"
+                            )
 
                         # snap.volume       = 最後一筆成交量（單筆，極小）← 錯誤欄位
                         # snap.total_volume = 當日累計總成交量（張）      ← 正確欄位
@@ -664,6 +680,7 @@ def fetch_data_sinopac(codes: list, days: int,
                         yf_v = yf_today_vol.get(code, 0)
                         ratio_list.append((code, yf_v, vol_k))
 
+                        # ── 用 snap_date（真實日期）當 bar index ─────────────
                         today_bar = pd.DataFrame({
                             "Open":   [float(snap.open)],
                             "High":   [float(snap.high)],
@@ -671,10 +688,10 @@ def fetch_data_sinopac(codes: list, days: int,
                             "Close":  [close],
                             "Volume": [vol_k * 1000],   # 張 → 股（與 yfinance 對齊）
                             "Vol_K":  [vol_k],
-                        }, index=[pd.Timestamp(_today_tw)])
+                        }, index=[pd.Timestamp(snap_date)])
                         df = results[code]
-                        # 移除 yfinance 的今日舊資料（若有），換成 Shioaji 即時
-                        if len(df) > 0 and df.index[-1].date() == _today_tw:
+                        # 移除同日期的 yfinance 舊資料（若有），換成 Shioaji 即時
+                        if len(df) > 0 and df.index[-1].date() == snap_date:
                             df = df.iloc[:-1]
                         results[code] = pd.concat([df, today_bar])
                         updated += 1
@@ -684,6 +701,16 @@ def fetch_data_sinopac(codes: list, days: int,
             status = "盤中即時" if _market_open else "今日收盤"
             print(f"  ✅ 永豐金 {status} 更新：{updated}/{len(contracts)} 檔"
                   f"  （零成交量跳過：{zero_vol} 檔）")
+
+            # ── 資料日期不一致警告 ────────────────────────────────
+            if stale_codes:
+                print(f"\n  ⚠️  【資料日期異常】以下 {len(stale_codes)} 檔 snapshot 日期"
+                      f"與今日（{_today_tw}）不符，訊號可能基於昨日舊資料：")
+                for s in stale_codes[:10]:
+                    print(f"     • {s}")
+                if len(stale_codes) > 10:
+                    print(f"     ...（共 {len(stale_codes)} 檔）")
+                print(f"  💡 建議：收盤後 5 分鐘再執行，或改用 --datasource yfinance")
 
             # ── 診斷：Shioaji vs yfinance 量比分析 ───────────────
             if ratio_list:
