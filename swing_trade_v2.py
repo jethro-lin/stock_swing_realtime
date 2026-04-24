@@ -643,25 +643,126 @@ def fetch_data(codes: list, days: int = DEFAULT_DAYS) -> dict:
 
 
 # ══════════════════════════════════════════════
-# 永豐金 Shioaji 資料下載（混合模式）
+# TWSE / TPEX 官方日K 備援下載
+# ══════════════════════════════════════════════
+def _fetch_official_daily(code: str,
+                           start_date: datetime.date,
+                           end_date: datetime.date):
+    """
+    從 TWSE（上市）或 TPEX（上櫃）抓官方日K作為備援。
+    回傳 DatetimeIndex DataFrame（Open/High/Low/Close/Volume/Vol_K）
+    或 None（找不到資料）。
+    """
+    import warnings as _w
+    _w.filterwarnings("ignore", message="Unverified HTTPS")
+
+    # 決定要抓哪幾個月
+    months: list = []
+    cur = start_date.replace(day=1)
+    while cur <= end_date:
+        months.append(cur.strftime("%Y%m"))
+        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
+
+    def _twse(yyyymm: str) -> list:
+        url = (f"https://www.twse.com.tw/exchangeReport/STOCK_DAY"
+               f"?response=json&date={yyyymm}01&stockNo={code}")
+        try:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"},
+                             timeout=12, verify=False)
+            data = r.json()
+            if data.get("stat") != "OK":
+                return []
+            rows = []
+            for row in data.get("data", []):
+                try:
+                    p = row[0].replace("/", "-").split("-")
+                    dt = f"{int(p[0])+1911}-{p[1]}-{p[2]}"
+                    rows.append({
+                        "date":  dt,
+                        "Open":  float(row[3].replace(",", "")),
+                        "High":  float(row[4].replace(",", "")),
+                        "Low":   float(row[5].replace(",", "")),
+                        "Close": float(row[6].replace(",", "")),
+                        "Vol_K": int(row[1].replace(",", "")) // 1000,
+                    })
+                except Exception:
+                    continue
+            return rows
+        except Exception:
+            return []
+
+    def _tpex(yyyymm: str) -> list:
+        roc_y = int(yyyymm[:4]) - 1911
+        mon   = yyyymm[4:]
+        url = (f"https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/"
+               f"st43_result.php?l=zh-tw&d={mon}/{roc_y}&s={code}&o=json")
+        try:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"},
+                             timeout=12, verify=False)
+            data = r.json()
+            if not data.get("iTotalRecords", 0):
+                return []
+            rows = []
+            for row in data.get("aaData", []):
+                try:
+                    p = row[0].replace("/", "-").split("-")
+                    dt = f"{int(p[0])+1911}-{p[1]}-{p[2]}"
+                    rows.append({
+                        "date":  dt,
+                        "Open":  float(row[2].replace(",", "")),
+                        "High":  float(row[3].replace(",", "")),
+                        "Low":   float(row[4].replace(",", "")),
+                        "Close": float(row[5].replace(",", "")),
+                        "Vol_K": int(row[1].replace(",", "")) // 1000,
+                    })
+                except Exception:
+                    continue
+            return rows
+        except Exception:
+            return []
+
+    all_rows: list = []
+    for ym in months:
+        rows = _twse(ym)
+        if rows:
+            all_rows.extend(rows)
+        else:
+            all_rows.extend(_tpex(ym))
+        time.sleep(0.25)   # 避免 rate limit
+
+    if not all_rows:
+        return None
+
+    df = pd.DataFrame(all_rows)
+    df = df[(df["date"] >= str(start_date)) & (df["date"] <= str(end_date))]
+    if df.empty:
+        return None
+    df = df.sort_values("date").drop_duplicates("date").reset_index(drop=True)
+    df.index = pd.to_datetime(df["date"])
+    df.index.name = None
+    df = df.drop(columns=["date"])
+    df["Volume"] = df["Vol_K"] * 1000   # 張 → 股（相容下游欄位）
+    return df
+
+
+# ══════════════════════════════════════════════
+# 永豐金 Shioaji 資料下載（kbars 主源 + TWSE 備援）
 # ══════════════════════════════════════════════
 def fetch_data_sinopac(codes: list, days: int,
                        api_key: str, secret_key: str) -> dict:
     """
-    混合模式：
-      歷史資料（D-1 以前） → yfinance 批次下載（速度快）
-      今日 OHLCV          → 永豐金 api.snapshots()（即時、準確）
+    全新架構（yfinance 已完全移除）：
+      歷史資料  → 永豐金 kbars（分鐘K聚合日K，與 TWSE 官方完全一致）
+      今日 OHLCV → 永豐金 snapshots（即時，已修正 snap.ts 日期）
+      備援      → TWSE / TPEX 官方 API（kbars 失敗時自動切換）
 
-    原因：api.kbars() 歷史日K需要較高 API 權限，一般帳號不開放；
-          但 snapshots 即時報價是基本功能，盤後仍可取到今日完整收盤。
-
-    需求：pip install shioaji  ＋ 永豐金 API 金鑰（SJ_API_KEY / SJ_SECRET_KEY）
+    需求：pip install shioaji  ＋ 永豐金 API 金鑰
     """
     if not HAS_SHIOAJI:
         print("  ❌ 請先安裝：pip install shioaji")
         return {}
 
-    # ── 台灣時間判斷 ─────────────────────────────
+    # ── 台灣時間 ──────────────────────────────────────────────────
     _tz_tw       = datetime.timezone(datetime.timedelta(hours=8))
     _now_tw      = datetime.datetime.now(_tz_tw)
     _today_tw    = _now_tw.date()
@@ -669,199 +770,248 @@ def fetch_data_sinopac(codes: list, days: int,
     _close_tw    = _now_tw.replace(hour=13, minute=30, second=0, microsecond=0)
     _market_open = (_open_tw <= _now_tw < _close_tw)
 
-    # ── 第一步：yfinance 下載歷史資料 ─────────────
-    print(f"  📥 [1/2] yfinance 下載歷史資料...")
-    results = fetch_data(codes, days)
-    if not results:
-        return {}
+    # 歷史區間（kbars 不含當日盤中，故 end = 昨日）
+    buf        = days + 40
+    hist_end   = _today_tw - datetime.timedelta(days=1)
+    hist_start = _today_tw - datetime.timedelta(days=buf)
+    start_str  = str(hist_start)
+    end_str    = str(hist_end)
 
-    # ── 第二步：永豐金 snapshots 補上今日收盤 ───────
-    print(f"  📡 [2/2] 永豐金 snapshots 補上今日 OHLCV...")
-    if _market_open:
-        print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，盤中執行"
-              f"——snapshots 為即時盤中報價，非收盤價，今日訊號僅供參考")
-
+    # ── Step 1：登入 ──────────────────────────────────────────────
+    print(f"  🔑 永豐金登入中...")
     try:
         api = sj.Shioaji()
-        api.login(
-            api_key=api_key,
-            secret_key=secret_key,
-            contracts_timeout=30000,
-        )
+        api.login(api_key=api_key, secret_key=secret_key, contracts_timeout=30000)
         print(f"  ✅ 永豐金登入成功（api_key: {api_key[:6]}...）")
+    except Exception as e:
+        print(f"  ❌ 永豐金登入失敗：{e}")
+        return {}
 
-        # 等待合約就緒
-        for _w in range(31):
-            try:
-                if api.Contracts.Stocks["2330"] is not None:
-                    break
-            except Exception:
-                pass
-            time.sleep(1)
-
-        def _get_contract(code: str):
-            for mkt in ("TSE", "OTC"):
-                try:
-                    c = getattr(api.Contracts.Stocks, mkt)[code]
-                    if c is not None:
-                        return c
-                except Exception:
-                    pass
-            try:
-                return api.Contracts.Stocks[code]
-            except Exception:
-                return None
-
-        # 收集有歷史資料的股票合約
-        contracts, c2code = [], {}
-        for code in list(results.keys()):
-            c = _get_contract(code)
-            if c is not None:
-                contracts.append(c)
-                c2code[c.code] = code
-
-        if contracts:
-            # ── 先記錄 yfinance 今日的量（對比用）──────────────
-            yf_today_vol = {}
-            for code, df in results.items():
-                if len(df) > 0 and df.index[-1].date() == _today_tw:
-                    yf_today_vol[code] = float(df["Vol_K"].iloc[-1])
-
-            # ── 分批取 snapshots（每批最多 200）─────────────────
-            updated    = 0
-            zero_vol   = 0   # total_volume=0 的筆數（保留 yfinance）
-            stale_codes = []  # snapshot 日期與今日不符的股票
-            ratio_list = []  # (code, yf_vol, sj_vol) 量比記錄
-
-            for bi in range(0, len(contracts), 200):
-                batch = contracts[bi:bi+200]
-                try:
-                    snaps = api.snapshots(batch)
-                    for snap in snaps:
-                        code = c2code.get(snap.code, snap.code)
-                        if code not in results:
-                            continue
-                        close = float(snap.close)
-                        if close <= 0:
-                            continue
-
-                        # ── 從 snap.ts 取出 snapshot 的實際資料日期 ──────────
-                        snap_ts = getattr(snap, "ts", None)
-                        if snap_ts and snap_ts > 0:
-                            snap_date = datetime.datetime.fromtimestamp(
-                                snap_ts / 1e9, tz=_tz_tw
-                            ).date()
-                        else:
-                            snap_date = _today_tw  # 無 ts 欄位時退回今日
-
-                        # 記錄資料日期與執行日不符的股票（可能是昨日舊資料）
-                        if snap_date != _today_tw:
-                            stale_codes.append(
-                                f"{code}（snap={snap_date}, 今日={_today_tw}）"
-                            )
-
-                        # snap.volume       = 最後一筆成交量（單筆，極小）← 錯誤欄位
-                        # snap.total_volume = 當日累計總成交量（張）      ← 正確欄位
-                        tv    = float(snap.total_volume) if snap.total_volume else 0.0
-                        lv    = float(snap.volume)       if snap.volume       else 0.0
-                        vol_k = tv or lv
-
-                        if vol_k <= 0:
-                            # Shioaji 無量資料 → 保留 yfinance 原始資料，不替換
-                            zero_vol += 1
-                            continue
-
-                        # 記錄量比（用於後續診斷）
-                        yf_v = yf_today_vol.get(code, 0)
-                        ratio_list.append((code, yf_v, vol_k))
-
-                        # ── 用 snap_date（真實日期）當 bar index ─────────────
-                        today_bar = pd.DataFrame({
-                            "Open":   [float(snap.open)],
-                            "High":   [float(snap.high)],
-                            "Low":    [float(snap.low)],
-                            "Close":  [close],
-                            "Volume": [vol_k * 1000],   # 張 → 股（與 yfinance 對齊）
-                            "Vol_K":  [vol_k],
-                        }, index=[pd.Timestamp(snap_date)])
-                        df = results[code]
-                        # 移除同日期的 yfinance 舊資料（若有），換成 Shioaji 即時
-                        if len(df) > 0 and df.index[-1].date() == snap_date:
-                            df = df.iloc[:-1]
-                        results[code] = pd.concat([df, today_bar])
-                        updated += 1
-                except Exception as e:
-                    print(f"  ⚠️  snapshots 批次失敗：{e}")
-
-            status = "盤中即時" if _market_open else "今日收盤"
-            print(f"  ✅ 永豐金 {status} 更新：{updated}/{len(contracts)} 檔"
-                  f"  （零成交量跳過：{zero_vol} 檔）")
-
-            # ── 資料日期不一致警告 ────────────────────────────────
-            if stale_codes:
-                print(f"\n  ⚠️  【資料日期異常】以下 {len(stale_codes)} 檔 snapshot 日期"
-                      f"與今日（{_today_tw}）不符，訊號可能基於昨日舊資料：")
-                for s in stale_codes[:10]:
-                    print(f"     • {s}")
-                if len(stale_codes) > 10:
-                    print(f"     ...（共 {len(stale_codes)} 檔）")
-                print(f"  💡 建議：收盤後 5 分鐘再執行，或改用 --datasource yfinance")
-
-            # ── 診斷：Shioaji vs yfinance 量比分析 ───────────────
-            if ratio_list:
-                ratios_by_code = {code: (sj / yf) for code, yf, sj in ratio_list if yf > 0}
-                ratios = sorted(ratios_by_code.values())
-                if ratios:
-                    median_r = ratios[len(ratios) // 2]
-                    print(f"\n  🔬 Shioaji vs yfinance 量比（共 {len(ratios)} 檔）：")
-                    print(f"     中位數={median_r:.3f}x  "
-                          f"最小={ratios[0]:.3f}x  最大={ratios[-1]:.3f}x")
-                    if 0.5 < median_r < 2.0:
-                        print(f"     ✅ 量單位一致（中位數接近 1x）")
-                    elif median_r > 500:
-                        print(f"     ⚠️  Shioaji 量疑似為【股/Shares】，需除以 1000 才是張")
-                    elif median_r < 0.05:
-                        print(f"     ⚠️  Shioaji 量遠低於 yfinance，可能快照時間不對或欄位錯誤")
-
-                    # ── 校正：以 Shioaji 為基準，校正歷史 yfinance 量 ──
-                    # 每檔用個別量比；無量比資料的股票用中位數代替
-                    calibrated = 0
-                    for code, df in results.items():
-                        factor = ratios_by_code.get(code, median_r)
-                        if abs(factor - 1.0) < 0.001:
-                            continue   # 幾乎相同，跳過
-                        # 只校正歷史列（非今日）；今日已是 Shioaji 真實值
-                        mask = df.index.date != _today_tw
-                        if mask.any():
-                            df.loc[mask, "Vol_K"]  = df.loc[mask, "Vol_K"]  * factor
-                            df.loc[mask, "Volume"] = df.loc[mask, "Volume"] * factor
-                            results[code] = df
-                            calibrated += 1
-                    print(f"     📐 歷史量校正完成：{calibrated} 檔"
-                          f"（以 Shioaji 為基準，yfinance 歷史量 × 個別量比）")
-
-                    # 找出量比最異常的 5 筆
-                    ratio_list.sort(key=lambda x: abs((x[2]/x[1] if x[1] > 0 else 999) - 1), reverse=True)
-                    print(f"\n     量比最異常的前 5 檔（Shioaji 與 yfinance 差異最大）：")
-                    print(f"     {'代號':6s}  {'yfinance(張)':>12s}  {'Shioaji(張)':>12s}  {'比值':>8s}")
-                    print(f"     {'─'*52}")
-                    for code, yf_v, sj_v in ratio_list[:5]:
-                        r = sj_v / yf_v if yf_v > 0 else float("inf")
-                        print(f"     {code:6s}  {yf_v:>12.0f}  {sj_v:>12.0f}  {r:>8.2f}x")
-                    print()
-        else:
-            print(f"  ⚠️  找不到可用合約，跳過今日更新")
-
+    # 等待合約就緒
+    for _wi in range(31):
         try:
-            api.logout()
-            print(f"  🔓 已登出永豐金 API")
+            if api.Contracts.Stocks["2330"] is not None:
+                break
         except Exception:
             pass
+        time.sleep(1)
 
-    except Exception as e:
-        print(f"  ⚠️  永豐金連線失敗（{e}），僅使用 yfinance 歷史資料")
+    def _get_contract(code: str):
+        for mkt in ("TSE", "OTC"):
+            try:
+                c = getattr(api.Contracts.Stocks, mkt)[code]
+                if c is not None:
+                    return c
+            except Exception:
+                pass
+        try:
+            return api.Contracts.Stocks[code]
+        except Exception:
+            return None
 
-    _check_data_freshness(results, source="永豐金+yfinance")
+    # ── Step 2：kbars 下載歷史日K（並行） ────────────────────────
+    print(f"  📥 [1/2] 永豐金 kbars 下載歷史日K（{start_str} ~ {end_str}）...")
+    if _market_open:
+        print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，盤中執行"
+              f"——歷史資料截至昨日，今日訊號僅供參考")
+
+    results: dict = {}
+    fallback_codes: list = []
+    _lock = threading.Lock()
+
+    def _fetch_kbars_one(code: str) -> None:
+        """下載單一股票的分鐘 kbars，聚合成日K，寫入 results"""
+        contract = _get_contract(code)
+        if contract is None:
+            with _lock:
+                fallback_codes.append(code)
+            return
+
+        kb = None
+        for freq_kwarg in [{"frequency": "D"}, {}]:
+            try:
+                kb = api.kbars(contract=contract,
+                               start=start_str, end=end_str,
+                               **freq_kwarg)
+                break
+            except TypeError as te:
+                if "frequency" in str(te):
+                    continue
+                break
+            except Exception:
+                break
+
+        if kb is None:
+            with _lock:
+                fallback_codes.append(code)
+            return
+
+        try:
+            df_min = pd.DataFrame({**kb})
+            if len(df_min) == 0:
+                with _lock:
+                    fallback_codes.append(code)
+                return
+
+            df_min["ts"]   = pd.to_datetime(df_min["ts"])
+            df_min["date"] = df_min["ts"].dt.date
+
+            df_day = df_min.groupby("date").agg(
+                Open   = ("Open",   "first"),
+                High   = ("High",   "max"),
+                Low    = ("Low",    "min"),
+                Close  = ("Close",  "last"),
+                Vol_K  = ("Volume", "sum"),   # kbars volume 單位：張
+            ).reset_index()
+
+            df_day.index = pd.to_datetime(df_day["date"])
+            df_day.index.name = None
+            df_day = df_day.drop(columns=["date"])
+            df_day["Volume"] = df_day["Vol_K"] * 1000   # 張 → 股（相容下游）
+
+            # 過濾到指定範圍
+            df_day = df_day[(df_day.index.date >= hist_start) &
+                            (df_day.index.date <= hist_end)]
+
+            if len(df_day) < 5:
+                with _lock:
+                    fallback_codes.append(code)
+                return
+
+            with _lock:
+                results[code] = df_day
+
+        except Exception:
+            with _lock:
+                fallback_codes.append(code)
+
+    # 並行下載（max_workers=6，避免 sinopac API 過載）
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {executor.submit(_fetch_kbars_one, c): c for c in codes}
+        done = 0
+        total = len(codes)
+        for fut in futures:
+            fut.result()
+            done += 1
+            if done % 50 == 0 or done == total:
+                print(f"  ── kbars 進度：{done}/{total} 檔"
+                      f"（成功 {len(results)} / 備援 {len(fallback_codes)}）")
+
+    print(f"  ✅ kbars 完成：{len(results)} 檔成功  |  {len(fallback_codes)} 檔切換備援")
+
+    # ── Step 3：TWSE / TPEX 備援 ────────────────────────────────
+    if fallback_codes:
+        print(f"  🔄 TWSE/TPEX 官方備援下載 {len(fallback_codes)} 檔...")
+        official_ok = 0
+        for code in fallback_codes:
+            df_off = _fetch_official_daily(code, hist_start, hist_end)
+            if df_off is not None and len(df_off) >= 5:
+                results[code] = df_off
+                official_ok += 1
+        print(f"  ✅ TWSE/TPEX 備援：{official_ok}/{len(fallback_codes)} 檔成功")
+
+    if not results:
+        try:
+            api.logout()
+        except Exception:
+            pass
+        print("  ❌ 無法取得任何股票資料")
+        return {}
+
+    # ── Step 4：snapshots 補上今日收盤 ────────────────────────────
+    print(f"  📡 [2/2] 永豐金 snapshots 補上今日 OHLCV...")
+
+    contracts, c2code = [], {}
+    for code in list(results.keys()):
+        c = _get_contract(code)
+        if c is not None:
+            contracts.append(c)
+            c2code[c.code] = code
+
+    if contracts:
+        updated     = 0
+        zero_vol    = 0
+        stale_codes: list = []
+
+        for bi in range(0, len(contracts), 200):
+            batch = contracts[bi:bi+200]
+            try:
+                snaps = api.snapshots(batch)
+                for snap in snaps:
+                    code = c2code.get(snap.code, snap.code)
+                    if code not in results:
+                        continue
+                    close = float(snap.close)
+                    if close <= 0:
+                        continue
+
+                    # 從 snap.ts（奈秒）取得資料的實際日期
+                    snap_ts = getattr(snap, "ts", None)
+                    if snap_ts and snap_ts > 0:
+                        snap_date = datetime.datetime.fromtimestamp(
+                            snap_ts / 1e9, tz=_tz_tw
+                        ).date()
+                    else:
+                        snap_date = _today_tw
+
+                    if snap_date != _today_tw:
+                        stale_codes.append(
+                            f"{code}（snap={snap_date}, 今日={_today_tw}）"
+                        )
+
+                    # snap.total_volume = 當日累計總量（張）← 正確欄位
+                    tv    = float(snap.total_volume) if snap.total_volume else 0.0
+                    lv    = float(snap.volume)       if snap.volume       else 0.0
+                    vol_k = tv or lv
+
+                    if vol_k <= 0:
+                        zero_vol += 1
+                        continue
+
+                    today_bar = pd.DataFrame({
+                        "Open":   [float(snap.open)],
+                        "High":   [float(snap.high)],
+                        "Low":    [float(snap.low)],
+                        "Close":  [close],
+                        "Vol_K":  [vol_k],
+                        "Volume": [vol_k * 1000],
+                    }, index=[pd.Timestamp(snap_date)])
+
+                    df = results[code]
+                    # 同日期的 kbars 舊資料替換成 snapshot 即時值
+                    if len(df) > 0 and df.index[-1].date() == snap_date:
+                        df = df.iloc[:-1]
+                    results[code] = pd.concat([df, today_bar])
+                    updated += 1
+            except Exception as e:
+                print(f"  ⚠️  snapshots 批次失敗：{e}")
+
+        status = "盤中即時" if _market_open else "今日收盤"
+        print(f"  ✅ 永豐金 {status} 更新：{updated}/{len(contracts)} 檔"
+              f"  （零成交量跳過：{zero_vol} 檔）")
+
+        if stale_codes:
+            print(f"\n  ⚠️  【資料日期異常】以下 {len(stale_codes)} 檔 snapshot 日期"
+                  f"與今日（{_today_tw}）不符，訊號可能基於昨日舊資料：")
+            for s in stale_codes[:10]:
+                print(f"     • {s}")
+            if len(stale_codes) > 10:
+                print(f"     ...（共 {len(stale_codes)} 檔）")
+            print(f"  💡 建議：收盤後 5 分鐘再執行，或等盤後 snapshot 更新完畢")
+    else:
+        print(f"  ⚠️  找不到可用合約，跳過今日更新")
+
+    try:
+        api.logout()
+        print(f"  🔓 已登出永豐金 API")
+    except Exception:
+        pass
+
+    # ── Step 5：過濾不足資料 & 輸出 ───────────────────────────────
+    results = {c: df for c, df in results.items() if len(df) >= 22}
+    print(f"  📊 最終有效股票（≥22日K）：{len(results)} 檔")
+
+    _check_data_freshness(results, source="永豐金 kbars")
     return results
 
 
