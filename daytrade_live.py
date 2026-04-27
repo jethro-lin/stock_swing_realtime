@@ -27,7 +27,8 @@
 
 架構說明：
   - Shioaji 訂閱 Tick，有成交才推送，不用 polling
-  - 技術指標基準在啟動時用 yfinance 昨日收盤資料預算一次，盤中固定不變
+  - 技術指標基準在啟動時用永豐金 kbars 昨日收盤資料預算一次，盤中固定不變
+  - 歷史資料源：永豐金 kbars（主）→ TWSE/TPEX 官方 API（備援，免帳號）
   - 爆量判斷：用昨日收盤量 / 5日均量，不受盤中累積量影響
   - 當日部位追蹤：記憶體 dict，記錄進場價、停損價、目前損益
 """
@@ -304,13 +305,88 @@ def build_base(hist_df: pd.DataFrame) -> dict | None:
         for j in range(1, 4)
     ) if len(df) >= 5 else False
 
-    # ── 新策略：K棒型態（H/HS/I/IS） ─────────────
-    # 昨日 K 棒基礎數據（盤中即時 K 棒需要昨日作為對比）
+    # ── K棒型態（H/HS/I/IS）：昨日K棒基礎數據 ──────
     prev_open  = float(df["Open"].iloc[-1])
     prev_close = float(closes.iloc[-1])
     prev_body  = abs(prev_close - prev_open)
     prev_bull  = prev_close > prev_open   # 昨日陽線
     prev_bear  = prev_close < prev_open   # 昨日陰線
+
+    # ── J/JS：MACD (12/26/9) ─────────────────────
+    closes_s   = pd.Series(df["Close"].values, dtype=float)
+    ema12      = closes_s.ewm(span=12, adjust=False).mean()
+    ema26      = closes_s.ewm(span=26, adjust=False).mean()
+    macd_line  = ema12 - ema26
+    macd_sig   = macd_line.ewm(span=9, adjust=False).mean()
+    macd_t     = float(macd_line.iloc[-1]) if pd.notna(macd_line.iloc[-1]) else 0.0
+    macd_p     = float(macd_line.iloc[-2]) if len(macd_line) >= 2 and pd.notna(macd_line.iloc[-2]) else 0.0
+    msig_t     = float(macd_sig.iloc[-1])  if pd.notna(macd_sig.iloc[-1])  else 0.0
+    msig_p     = float(macd_sig.iloc[-2])  if len(macd_sig) >= 2 and pd.notna(macd_sig.iloc[-2])  else 0.0
+
+    # ── K/KS：布林通道 (20, 2) ──────────────────
+    bb_mid_s   = closes_s.rolling(20).mean()
+    bb_std_s   = closes_s.rolling(20).std()
+    bb_upper_s = bb_mid_s + 2 * bb_std_s
+    bb_lower_s = bb_mid_s - 2 * bb_std_s
+    bb_lower_t = float(bb_lower_s.iloc[-1]) if pd.notna(bb_lower_s.iloc[-1]) else float(closes_s.iloc[-1])
+    bb_upper_t = float(bb_upper_s.iloc[-1]) if pd.notna(bb_upper_s.iloc[-1]) else float(closes_s.iloc[-1])
+    bb_lower_p = float(bb_lower_s.iloc[-2]) if len(bb_lower_s) >= 2 and pd.notna(bb_lower_s.iloc[-2]) else bb_lower_t
+    bb_upper_p = float(bb_upper_s.iloc[-2]) if len(bb_upper_s) >= 2 and pd.notna(bb_upper_s.iloc[-2]) else bb_upper_t
+
+    # ── L/LS：KD 隨機指標 (9/3/3) ───────────────
+    high_s  = pd.Series(df["High"].values, dtype=float)
+    low_s   = pd.Series(df["Low"].values,  dtype=float)
+    hi9     = high_s.rolling(9).max()
+    lo9     = low_s.rolling(9).min()
+    rsv     = ((closes_s - lo9) / (hi9 - lo9).replace(0, float("nan")) * 100).fillna(50)
+    kk_s    = rsv.ewm(com=2, adjust=False).mean()
+    kd_s    = kk_s.ewm(com=2, adjust=False).mean()
+    kk_t    = float(kk_s.iloc[-1]) if pd.notna(kk_s.iloc[-1]) else 50.0
+    kd_t    = float(kd_s.iloc[-1]) if pd.notna(kd_s.iloc[-1]) else 50.0
+    kk_p    = float(kk_s.iloc[-2]) if len(kk_s) >= 2 and pd.notna(kk_s.iloc[-2]) else 50.0
+    kd_p    = float(kd_s.iloc[-2]) if len(kd_s) >= 2 and pd.notna(kd_s.iloc[-2]) else 50.0
+
+    # ── M/MS：Williams %R (14) ───────────────────
+    hi14    = high_s.rolling(14).max()
+    lo14    = low_s.rolling(14).min()
+    wr_s    = ((hi14 - closes_s) / (hi14 - lo14).replace(0, float("nan")) * -100).fillna(-50)
+    wr_t    = float(wr_s.iloc[-1]) if pd.notna(wr_s.iloc[-1]) else -50.0
+    wr_p    = float(wr_s.iloc[-2]) if len(wr_s) >= 2 and pd.notna(wr_s.iloc[-2]) else -50.0
+
+    # ── O/OS：晨星/黃昏之星 前兩日資料 ─────────
+    #   day1 = hist[-2]（兩日前）, day2 = hist[-1]（昨日）, day3 = 今日盤中
+    if len(df) >= 3:
+        star_d1_o    = float(df["Open"].iloc[-2])
+        star_d1_c    = float(df["Close"].iloc[-2])
+    else:
+        star_d1_o = star_d1_c = prev_close
+    star_d1_body = abs(star_d1_c - star_d1_o)
+    star_d1_mid  = (star_d1_c + star_d1_o) / 2
+    star_d1_bear = star_d1_c < star_d1_o
+    star_d1_bull = star_d1_c > star_d1_o
+    star_d2_body = prev_body   # 昨日實體（day2）
+
+    # ── P/PS：紅三兵/黑三兵 前兩日資料 ─────────
+    #   d1 = hist[-2]（兩日前）, d2 = hist[-1]（昨日）, d3 = 今日盤中
+    if len(df) >= 3:
+        sol_d1_o = float(df["Open"].iloc[-2])
+        sol_d1_c = float(df["Close"].iloc[-2])
+    else:
+        sol_d1_o = sol_d1_c = prev_close
+    sol_d2_o = prev_open
+    sol_d2_c = prev_close
+
+    # ── Q/QS：Inside Bar 前兩日資料 ─────────────
+    #   prev2 = hist[-2]（兩日前）, prev = hist[-1]（昨日）
+    if len(df) >= 2:
+        ib_prev2_h  = float(df["High"].iloc[-2])
+        ib_prev2_l  = float(df["Low"].iloc[-2])
+        ib_prev_h   = float(df["High"].iloc[-1])
+        ib_prev_l   = float(df["Low"].iloc[-1])
+        ib_is_inside = (ib_prev_h < ib_prev2_h) and (ib_prev_l > ib_prev2_l)
+    else:
+        ib_prev2_h = ib_prev2_l = 0.0
+        ib_is_inside = False
 
     return {
         "avg5":          avg5,
@@ -334,6 +410,27 @@ def build_base(hist_df: pd.DataFrame) -> dict | None:
         "prev_bull":     prev_bull,
         "prev_bear":     prev_bear,
         "open_price":    0.0,   # 今日開盤價（盤中填入）
+        # ── J/JS ──
+        "macd_t":        macd_t,   "macd_p":  macd_p,
+        "msig_t":        msig_t,   "msig_p":  msig_p,
+        # ── K/KS ──
+        "bb_lower_t":    bb_lower_t,  "bb_lower_p": bb_lower_p,
+        "bb_upper_t":    bb_upper_t,  "bb_upper_p": bb_upper_p,
+        # ── L/LS ──
+        "kk_t":          kk_t,  "kd_t": kd_t,
+        "kk_p":          kk_p,  "kd_p": kd_p,
+        # ── M/MS ──
+        "wr_t":          wr_t,  "wr_p": wr_p,
+        # ── O/OS ──
+        "star_d1_body":  star_d1_body,  "star_d1_mid":  star_d1_mid,
+        "star_d1_bear":  star_d1_bear,  "star_d1_bull": star_d1_bull,
+        "star_d2_body":  star_d2_body,
+        # ── P/PS ──
+        "sol_d1_o":      sol_d1_o,  "sol_d1_c": sol_d1_c,
+        "sol_d2_o":      sol_d2_o,  "sol_d2_c": sol_d2_c,
+        # ── Q/QS ──
+        "ib_prev2_h":    ib_prev2_h,  "ib_prev2_l":  ib_prev2_l,
+        "ib_is_inside":  ib_is_inside,
     }
 
 
@@ -344,19 +441,28 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
     盤中策略判斷。所有技術指標基準來自 build_base()，盤中不重算。
     price / open_p / chg_pct / high_p / low_p 均為即時資料。
 
-    策略對照（與 swing_trade.py 一致）：
-      A/AS  均線突破/死亡 + 爆量      B/BS  開盤跳空缺口
-      C/CS  RSI 超賣/超買反轉         D/DS  突破/跌破近 5 日高低
-      E/ES  強勢連漲/弱勢連跌         F/FS  均量擴張/萎縮
-      G/GS  縮量後爆量上漲/下跌       H/HS  鎚子K / 射擊之星
-      I/IS  吞噬陽線 / 吞噬陰線
+    策略對照（與 swing_trade_v2.py 一致，共 37 個）：
+      A/AS   均線突破/死亡         B/BS   開盤跳空缺口
+      C/CS   RSI 超賣/超買反轉     D/DS   突破/跌破近 5 日高低
+      E/ES   強勢連漲/弱勢連跌     F/FS   均量擴張/萎縮
+      G/GS   縮量後上漲/爆跌       H/HS   鎚子K / 射擊之星
+      I/IS   吞噬陽線 / 吞噬陰線   J/JS   MACD 黃金/死亡交叉
+      K/KS   布林下軌反彈/上軌反壓 L/LS   KD 超賣/超買交叉
+      M/MS   威廉%R 超賣/超買      N/NS   多頭/空頭排列回測站回/跌破
+      O/OS   晨星 / 黃昏之星       P/PS   紅三兵 / 黑三兵
+      Q/QS   Inside Bar 突破/跌破  R/RS   BIAS 超跌反彈/超漲回落
+      B2     大跳空(≥5%)+低量(≥0.8x)
+    ★ 多方策略 A/B/D/F/G 已移除爆量條件（量多反而降低多方 EV）
     """
     ALL_KEYS = ["A","AS","B","BS","C","CS","D","DS","E","ES",
-                "F","FS","G","GS","H","HS","I","IS"]
+                "F","FS","G","GS","H","HS","I","IS",
+                "J","JS","K","KS","L","LS","M","MS",
+                "N","NS","O","OS","P","PS","Q","QS","R","RS","B2"]
     empty = {k: False for k in ALL_KEYS}
     if price == 0:
         return empty
 
+    # ── 基礎數值 ──────────────────────────────────
     avg5          = base["avg5"]
     vol_yesterday = base["vol_yesterday"]
     ma5           = base["ma5"]
@@ -369,7 +475,6 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
     three_up      = base["three_up"]
     three_dn      = base["three_dn"]
     prev_close    = base["prev_close"]
-    # 新策略所需欄位（build_base 已預算）
     vol_expand    = base.get("vol_expand",  False)
     vol_shrink    = base.get("vol_shrink",  False)
     tide_shrink   = base.get("tide_shrink", False)
@@ -382,20 +487,23 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
     vol_ratio = vol_yesterday / avg5 if avg5 > 0 else 0
     gap_pct   = (open_p - prev_close) / prev_close * 100 if prev_close else 0
 
-    # ── K棒型態（H/I）：需要今日盤中即時 O/H/L/C ──
+    # ── K棒型態（H/I/O/P）：需要今日盤中即時 O/H/L/C ──
+    body = upper = lower = 0.0
+    is_bull = is_bear = False
     hammer = shoot_star = engulf_bull = engulf_bear = False
-    if high_p > 0 and low_p > 0 and open_p > 0:
+    if open_p > 0:
         body    = abs(price - open_p)
-        upper   = high_p - max(price, open_p)
-        lower   = min(price, open_p) - low_p
         is_bull = price > open_p
         is_bear = price < open_p
+    if high_p > 0 and low_p > 0 and open_p > 0:
+        upper   = high_p - max(price, open_p)
+        lower   = min(price, open_p) - low_p
         # 鎚子K：下影線 ≥ 2×實體，上影線 ≤ 實體，前日收跌
-        hammer     = (body > 0 and lower >= 2*body and upper <= body
-                      and chg_pct < 0 and prev_bear)
+        hammer      = (body > 0 and lower >= 2*body and upper <= body
+                       and chg_pct < 0 and prev_bear)
         # 射擊之星：上影線 ≥ 2×實體，下影線 ≤ 實體，前日收漲
-        shoot_star = (body > 0 and upper >= 2*body and lower <= body
-                      and chg_pct > 0 and prev_bull)
+        shoot_star  = (body > 0 and upper >= 2*body and lower <= body
+                       and chg_pct > 0 and prev_bull)
         # 吞噬陽線：今日陽線包覆昨日陰線
         engulf_bull = (is_bull and prev_bear
                        and open_p <= prev_close and price >= prev_open
@@ -405,27 +513,103 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
                        and open_p >= prev_close and price <= prev_open
                        and body > prev_body * 0.8)
 
+    # ── 晨星 / 黃昏之星（O/OS）────────────────────
+    d1_body    = base.get("star_d1_body", 0.0)
+    d1_mid     = base.get("star_d1_mid",  0.0)
+    d1_bear_s  = base.get("star_d1_bear", False)
+    d1_bull_s  = base.get("star_d1_bull", False)
+    d2_body    = base.get("star_d2_body", 0.0)
+    morning_star = (
+        d1_bear_s and d1_body > 0 and
+        d2_body < d1_body * 0.4 and
+        is_bull and price > d1_mid and body >= d1_body * 0.5
+    )
+    evening_star = (
+        d1_bull_s and d1_body > 0 and
+        d2_body < d1_body * 0.4 and
+        is_bear and price < d1_mid and body >= d1_body * 0.5
+    )
+
+    # ── 紅三兵 / 黑三兵（P/PS）──────────────────
+    sol_d1_o = base.get("sol_d1_o", 0.0)
+    sol_d1_c = base.get("sol_d1_c", 0.0)
+    sol_d2_o = base.get("sol_d2_o", 0.0)
+    sol_d2_c = base.get("sol_d2_c", 0.0)
+    three_soldiers = (
+        sol_d1_c > sol_d1_o and sol_d2_c > sol_d2_o and is_bull and
+        sol_d2_c > sol_d1_c and price > sol_d2_c and
+        sol_d2_o >= sol_d1_o and open_p >= sol_d2_o
+    )
+    three_crows = (
+        sol_d1_c < sol_d1_o and sol_d2_c < sol_d2_o and is_bear and
+        sol_d2_c < sol_d1_c and price < sol_d2_c and
+        sol_d2_o <= sol_d1_o and open_p <= sol_d2_o
+    )
+
+    # ── Inside Bar 突破/跌破（Q/QS）─────────────
+    ib_prev2_h   = base.get("ib_prev2_h",   0.0)
+    ib_prev2_l   = base.get("ib_prev2_l",   0.0)
+    ib_is_inside = base.get("ib_is_inside", False)
+    inside_breakout  = ib_is_inside and (price > ib_prev2_h)
+    inside_breakdown = ib_is_inside and (price < ib_prev2_l) and (vol_ratio >= vol_mult)
+
+    # ── BIAS 乖離率（R/RS）──────────────────────
+    bias = (price - ma20) / ma20 * 100 if ma20 > 0 else 0.0
+
+    # ── MA 排列回測（N/NS）──────────────────────
+    ma_bull_align = ma5 > ma10 > ma20
+    ma_bear_align = ma5 < ma10 < ma20
+
     return {
-        # ── 原有 A–E ──────────────────────────────
-        "A":  bool(ma5 > ma20 and vol_ratio >= vol_mult and chg_pct > 0),
+        # ── A–E（多方移除爆量條件，空方保留）───────
+        "A":  bool(ma5 > ma20 and chg_pct > 0),                       # ★ 移除 vol_ratio
         "AS": bool(ma5 < ma20 and vol_ratio >= vol_mult and chg_pct < 0),
-        "B":  bool(gap_pct >= 2.0 and vol_ratio >= 1.3 and chg_pct > 0),
+        "B":  bool(gap_pct >= 2.0 and chg_pct > 0),                   # ★ 移除 1.3x
         "BS": bool(gap_pct <= -2.0 and vol_ratio >= 1.3 and chg_pct < 0),
         "C":  bool(rsi_prv < 35 and rsi_now > rsi_prv and price > ma5),
         "CS": bool(rsi_prv > 65 and rsi_now < rsi_prv and price < ma5),
-        "D":  bool(price > high5 and vol_ratio >= vol_mult),
+        "D":  bool(price > high5),                                     # ★ 移除 vol_ratio
         "DS": bool(price < low5 and vol_ratio >= vol_mult),
         "E":  bool(three_up and ma5 > ma10 > ma20 and chg_pct > 0),
         "ES": bool(three_dn and ma5 < ma10 < ma20 and chg_pct < 0),
-        # ── 新增 F–I ──────────────────────────────
-        "F":  bool(vol_expand  and vol_ratio >= vol_mult and chg_pct > 0),
+        # ── F–I ─────────────────────────────────────
+        "F":  bool(vol_expand  and chg_pct > 0),                       # ★ 移除 vol_ratio
         "FS": bool(vol_shrink  and vol_ratio >= vol_mult and chg_pct < 0),
-        "G":  bool(tide_shrink and vol_ratio >= vol_mult and chg_pct > 0),
+        "G":  bool(tide_shrink and chg_pct > 0),                       # ★ 移除 vol_ratio
         "GS": bool(tide_shrink and vol_ratio >= vol_mult and chg_pct < 0),
         "H":  bool(hammer),
         "HS": bool(shoot_star),
         "I":  bool(engulf_bull),
         "IS": bool(engulf_bear),
+        # ── J/JS：MACD 黃金/死亡交叉 ────────────────
+        "J":  bool(base["macd_p"] < base["msig_p"] and base["macd_t"] > base["msig_t"] and chg_pct > 0),
+        "JS": bool(base["macd_p"] > base["msig_p"] and base["macd_t"] < base["msig_t"] and chg_pct < 0),
+        # ── K/KS：布林下軌反彈 / 上軌反壓 ──────────
+        "K":  bool(prev_close <= base["bb_lower_p"] and price > base["bb_lower_t"]),
+        "KS": bool(prev_close >= base["bb_upper_p"] and price < base["bb_upper_t"]),
+        # ── L/LS：KD 超賣黃金交叉 / 超買死亡交叉 ────
+        "L":  bool(base["kk_t"] < 30 and base["kk_p"] < base["kd_p"] and base["kk_t"] > base["kd_t"]),
+        "LS": bool(base["kk_t"] > 70 and base["kk_p"] > base["kd_p"] and base["kk_t"] < base["kd_t"]),
+        # ── M/MS：威廉%R 超賣反彈 / 超買回落 ────────
+        "M":  bool(base["wr_p"] < -80 and base["wr_t"] > base["wr_p"] and chg_pct > 0),
+        "MS": bool(base["wr_p"] > -20 and base["wr_t"] < base["wr_p"] and chg_pct < 0),
+        # ── N/NS：多頭/空頭排列 MA5 回測 ────────────
+        "N":  bool(ma_bull_align and prev_close < ma5 and price >= ma5),
+        "NS": bool(ma_bear_align and prev_close > ma5 and price <= ma5),
+        # ── O/OS：晨星 / 黃昏之星 ───────────────────
+        "O":  bool(morning_star),
+        "OS": bool(evening_star),
+        # ── P/PS：紅三兵 / 黑三兵 ───────────────────
+        "P":  bool(three_soldiers),
+        "PS": bool(three_crows),
+        # ── Q/QS：Inside Bar 突破 / 跌破 ────────────
+        "Q":  bool(inside_breakout),
+        "QS": bool(inside_breakdown),
+        # ── R/RS：BIAS 超跌反彈 / 超漲回落 ──────────
+        "R":  bool(bias < -8  and chg_pct > 0),
+        "RS": bool(bias > +8  and chg_pct < 0),
+        # ── B2：大跳空(≥5%) + 量比≥0.8x ─────────────
+        "B2": bool(gap_pct >= 5.0 and vol_ratio >= 0.8 and chg_pct > 0),
     }
 
 
@@ -533,6 +717,10 @@ class LiveQuote:
         self._lock   = threading.Lock()
         self._ready  = False
 
+    def get_api(self):
+        """回傳已登入的 Shioaji api 物件（供 fetch_history 重用）"""
+        return self._api
+
     def login(self, api_key: str, secret_key: str) -> bool:
         try:
             import shioaji as sj
@@ -548,8 +736,18 @@ class LiveQuote:
                 accounts = self._api.login(
                     api_key=api_key,
                     secret_key=secret_key,
-                    contracts_timeout=15000,
+                    contracts_timeout=30000,
                 )
+            # 等待合約載入完成
+            print("  ⏳ 等待合約載入...")
+            for _ in range(60):
+                try:
+                    if self._api.Contracts.Stocks["2330"] is not None:
+                        break
+                except Exception:
+                    pass
+                time.sleep(1)
+            time.sleep(3)   # SOLACE session 穩定
             print(f"  ✅ 登入成功，帳號：{len(accounts)} 個")
             self._ready = True
             return True
@@ -721,11 +919,18 @@ def render(positions: list, signals: dict, scan_n: int,
         print_table(pos_df, display)
 
     # ── 訊號清單 ─────────────────────────────
-    col_map = {"A":"A多","AS":"AS空","B":"B多","BS":"BS空",
-               "C":"C多","CS":"CS空","D":"D多","DS":"DS空",
-               "E":"E多","ES":"ES空",
-               "F":"F多","FS":"FS空","G":"G多","GS":"GS空",
-               "H":"H多","HS":"HS空","I":"I多","IS":"IS空"}
+    col_map = {
+        "A":"A多",  "AS":"AS空", "B":"B多",  "BS":"BS空",
+        "C":"C多",  "CS":"CS空", "D":"D多",  "DS":"DS空",
+        "E":"E多",  "ES":"ES空", "F":"F多",  "FS":"FS空",
+        "G":"G多",  "GS":"GS空", "H":"H多",  "HS":"HS空",
+        "I":"I多",  "IS":"IS空", "J":"J多",  "JS":"JS空",
+        "K":"K多",  "KS":"KS空", "L":"L多",  "LS":"LS空",
+        "M":"M多",  "MS":"MS空", "N":"N多",  "NS":"NS空",
+        "O":"O多",  "OS":"OS空", "P":"P多",  "PS":"PS空",
+        "Q":"Q多",  "QS":"QS空", "R":"R多",  "RS":"RS空",
+        "B2":"B2多",
+    }
     rows = []
     for code, info in signals.items():
         sigs = info["sigs"]
@@ -734,13 +939,17 @@ def render(positions: list, signals: dict, scan_n: int,
         short_hit = sum(1 for k,v in sigs.items() if v and k.endswith("S"))
         if max(long_hit, short_hit) < min_hit:
             continue
+        # 建立欄位 dict，B多若同時觸發 B2 則標 ★（缺口≥5%，EV 更強）
+        sig_cells = {col_map[k]: "✅" if v else "❌" for k, v in sigs.items()}
+        if sigs.get("B") and sigs.get("B2"):
+            sig_cells["B多"] = "✅★"   # B2 強化訊號（跳空≥5%，EV 高 0.4~0.8%）
         rows.append({
             "代號":      code,
             "名稱":      q.get("name", code),
             "現價":      round(q.get("price", 0), 2),
             "漲跌幅(%)": f"{q.get('chg_pct', 0):+.2f}%",
             "成交量(張)": int(q.get("total_vol", 0)),
-            **{col_map[k]: "✅" if v else "❌" for k, v in sigs.items()},
+            **sig_cells,
             "命中數":    max(long_hit, short_hit),
             "更新":      q.get("time", ""),
         })
@@ -751,6 +960,9 @@ def render(positions: list, signals: dict, scan_n: int,
         display_cols = ["代號","名稱","現價","漲跌幅(%)","成交量(張)",
                         "A多","AS空","B多","BS空","C多","CS空","D多","DS空","E多","ES空",
                         "F多","FS空","G多","GS空","H多","HS空","I多","IS空",
+                        "J多","JS空","K多","KS空","L多","LS空","M多","MS空",
+                        "N多","NS空","O多","OS空","P多","PS空","Q多","QS空",
+                        "R多","RS空","B2多",
                         "命中數","更新"]
         print_table(sig_df, display_cols)
     else:
@@ -771,57 +983,251 @@ def render(positions: list, signals: dict, scan_n: int,
             print(f"     {a}")
 
     print("\n" + "═"*100)
-    print("  策略：A多=均線突破  AS空=均線死亡  B多=跳空↑   BS空=跳空↓   "
+    print("  策略：A多=均線突破  AS空=均線死亡+爆量  B多=跳空↑  BS空=跳空↓+爆量  "
           "C多=RSI超賣  CS空=RSI超買  D多=突破前高  DS空=跌破前低  E多=強勢連漲  ES空=弱勢連跌")
-    print("        F多=均量擴張  FS空=均量萎縮  G多=縮後爆量 GS空=縮後爆跌 "
-          "H多=鎚子K   HS空=射擊之星 I多=吞噬陽線 IS空=吞噬陰線")
+    print("        F多=均量擴張  FS空=均量萎縮+爆量  G多=縮後上漲  GS空=縮後爆跌  "
+          "H多=鎚子K   HS空=射擊之星  I多=吞噬陽線  IS空=吞噬陰線")
+    print("        J多=MACD黃叉  JS空=MACD死叉  K多=布林下軌  KS空=布林上軌  "
+          "L多=KD<30黃叉  LS空=KD>70死叉  M多=威廉超賣  MS空=威廉超買")
+    print("        N多=MA回測站回  NS空=MA回測跌破  O多=晨星  OS空=黃昏星  "
+          "P多=紅三兵  PS空=黑三兵  Q多=IB突破  QS空=IB跌破  R多=BIAS超跌  RS空=BIAS超漲  B2多=大跳空≥5%")
+    print("  ★ 標記：B多顯示 ✅★ 表示同時觸發 B2（缺口≥5%），此時配合趨勢策略 EV 可提升 +0.4~+0.8%")
     print("  （Ctrl+C 停止）")
 
 
 # ──────────────────────────────────────────────
-# 歷史資料下載（yfinance）
+# 歷史資料下載（永豐金 kbars 主源 + TWSE 官方備援）
 # ──────────────────────────────────────────────
-def fetch_history(codes: list) -> dict:
-    """下載近 150 日歷史資料，用於預算技術指標基準"""
-    try:
-        import yfinance as yf
-    except ImportError:
-        print("  ❌ 請先安裝：pip install yfinance")
-        return {}
+def _fetch_twse_stock(code: str, start: datetime.date, end: datetime.date) -> pd.DataFrame | None:
+    """
+    TWSE/TPEX 官方 API 抓單支股票歷史日 K。
+    上市用 twse.com.tw，上櫃用 tpex.org.tw。
+    回傳 DataFrame(Date, Open, High, Low, Close, Volume) 或 None。
+    """
+    import requests, re
 
-    tickers = [f"{c}.TW" for c in codes]
-    end     = datetime.date.today() + datetime.timedelta(days=1)
-    start   = datetime.date.today() - datetime.timedelta(days=150)
-    print(f"  📥 下載歷史資料 {start} ~ {end}...")
+    months = []
+    cur = start.replace(day=1)
+    while cur <= end:
+        months.append(cur.strftime("%Y%m"))
+        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
 
-    results = {}
-    batch   = 50
-    for i in range(0, len(tickers), batch):
-        sub = tickers[i:i+batch]
-        try:
-            raw = yf.download(sub, start=str(start), end=str(end),
-                              group_by="ticker", auto_adjust=True,
-                              progress=False, threads=True)
-            for ticker in sub:
-                code = ticker.replace(".TW", "")
+    rows_all = []
+    sess = requests.Session()
+    sess.headers.update({"User-Agent": "Mozilla/5.0"})
+    sess.verify = False
+
+    for ym in months:
+        # 先試上市（TWSE）
+        fetched = False
+        for attempt in range(2):
+            try:
+                url = (f"https://www.twse.com.tw/exchangeReport/STOCK_DAY"
+                       f"?response=json&date={ym}01&stockNo={code}")
+                r = sess.get(url, timeout=10)
+                if r.status_code == 200:
+                    j = r.json()
+                    if j.get("stat") == "OK" and j.get("data"):
+                        for row in j["data"]:
+                            try:
+                                # 民國年轉西元
+                                parts = row[0].split("/")
+                                year  = int(parts[0]) + 1911
+                                date  = datetime.date(year, int(parts[1]), int(parts[2]))
+                                if not (start <= date <= end):
+                                    continue
+                                def _clean(s):
+                                    return float(re.sub(r"[,X]", "", s) or "0")
+                                rows_all.append({
+                                    "Date":   date,
+                                    "Open":   _clean(row[3]),
+                                    "High":   _clean(row[4]),
+                                    "Low":    _clean(row[5]),
+                                    "Close":  _clean(row[6]),
+                                    "Volume": _clean(row[1]) * 1000,
+                                })
+                            except Exception:
+                                pass
+                        fetched = True
+                        break
+            except Exception:
+                pass
+            time.sleep(0.3)
+
+        # 若 TWSE 無資料，試上櫃（TPEX）
+        if not fetched:
+            try:
+                roc_ym = f"{int(ym[:4]) - 1911}/{ym[4:]}"
+                url    = (f"https://www.tpex.org.tw/web/stock/aftertrading/"
+                          f"daily_trading_info/st43_result.php"
+                          f"?l=zh-tw&d={roc_ym}&stkno={code}&_=1")
+                r = sess.get(url, timeout=10)
+                if r.status_code == 200:
+                    j = r.json()
+                    for row in j.get("aaData", []):
+                        try:
+                            parts = row[0].split("/")
+                            year  = int(parts[0]) + 1911
+                            date  = datetime.date(year, int(parts[1]), int(parts[2]))
+                            if not (start <= date <= end):
+                                continue
+                            def _clean2(s):
+                                return float(re.sub(r"[,X]", "", s) or "0")
+                            rows_all.append({
+                                "Date":   date,
+                                "Open":   _clean2(row[4]),
+                                "High":   _clean2(row[5]),
+                                "Low":    _clean2(row[6]),
+                                "Close":  _clean2(row[7]),
+                                "Volume": _clean2(row[1]) * 1000,
+                            })
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        time.sleep(0.2)
+
+    if not rows_all:
+        return None
+    df = pd.DataFrame(rows_all).sort_values("Date").drop_duplicates("Date")
+    df = df.set_index("Date")
+    df.index = pd.to_datetime(df.index)
+    return df if len(df) >= 20 else None
+
+
+def fetch_history(codes: list, api=None, days: int = 150) -> dict:
+    """
+    下載近 {days} 日歷史資料，用於預算技術指標基準。
+    資料源優先順序：
+      1. 永豐金 kbars（api != None 時）— 與 swing_trade_v2.py 相同邏輯
+      2. TWSE / TPEX 官方 API 備援（免帳號）
+    """
+    today      = datetime.date.today()
+    hist_end   = today - datetime.timedelta(days=1)   # kbars 不含當日盤中
+    hist_start = today - datetime.timedelta(days=days + 40)
+    start_str  = str(hist_start)
+    end_str    = str(hist_end)
+
+    print(f"  📥 下載歷史資料 {hist_start} ~ {hist_end}（共 {len(codes)} 檔）...")
+
+    results        = {}
+    fallback_codes = []
+
+    # ── 階段 1：永豐金 kbars ────────────────────────
+    if api is not None:
+        print("  📡 永豐金 kbars 下載中...")
+
+        def _get_contract(code: str):
+            for mkt in ("TSE", "OTC"):
                 try:
-                    if isinstance(raw.columns, pd.MultiIndex):
-                        if ticker in raw.columns.get_level_values(0):
-                            df = raw[ticker].copy()
-                        else:
-                            continue
-                    else:
-                        df = raw.copy()
-                    df.dropna(subset=["Close"], inplace=True)
-                    if len(df) >= 20:
-                        results[code] = df
+                    c = getattr(api.Contracts.Stocks, mkt)[code]
+                    if c is not None:
+                        return c
                 except Exception:
                     pass
-        except Exception as e:
-            print(f"  ⚠️  批次下載失敗：{e}")
-        time.sleep(0.3)
+            try:
+                return api.Contracts.Stocks[code]
+            except Exception:
+                return None
 
-    print(f"  ✅ 歷史資料：{len(results)} 檔")
+        # smoke test
+        _smoke_ok = False
+        _sc = _get_contract("2330")
+        if _sc:
+            try:
+                _kb = api.kbars(contract=_sc,
+                                start=str(hist_end - datetime.timedelta(days=5)),
+                                end=str(hist_end))
+                if _kb and len(pd.DataFrame({**_kb})) > 0:
+                    _smoke_ok = True
+            except Exception as e:
+                print(f"  ⚠️  kbars smoke test 失敗（{e}），改走 TWSE 備援")
+
+        if not _smoke_ok:
+            fallback_codes = list(codes)
+        else:
+            total = len(codes)
+            for idx, code in enumerate(codes, 1):
+                contract = _get_contract(code)
+                if contract is None:
+                    fallback_codes.append(code)
+                    continue
+
+                kb, last_err = None, None
+                for _attempt in range(3):
+                    for freq_kwarg in [{"frequency": "D"}, {}]:
+                        try:
+                            kb = api.kbars(contract=contract,
+                                           start=start_str, end=end_str,
+                                           **freq_kwarg)
+                            break
+                        except TypeError as te:
+                            if "frequency" in str(te):
+                                continue
+                            last_err = te; break
+                        except Exception as e:
+                            last_err = e; break
+                    if kb is not None:
+                        break
+                    if last_err and "Not ready" in str(last_err):
+                        time.sleep(1)
+                    else:
+                        break
+
+                if kb is None:
+                    fallback_codes.append(code)
+                    continue
+
+                try:
+                    df_min = pd.DataFrame({**kb})
+                    if len(df_min) == 0:
+                        fallback_codes.append(code)
+                        continue
+                    df_min["ts"]   = pd.to_datetime(df_min["ts"])
+                    df_min["date"] = df_min["ts"].dt.date
+                    df_day = df_min.groupby("date").agg(
+                        Open   = ("Open",   "first"),
+                        High   = ("High",   "max"),
+                        Low    = ("Low",    "min"),
+                        Close  = ("Close",  "last"),
+                        Volume = ("Volume", "sum"),
+                    ).reset_index()
+                    df_day.index = pd.to_datetime(df_day["date"])
+                    df_day.index.name = None
+                    df_day = df_day.drop(columns=["date"])
+                    df_day["Volume"] = df_day["Volume"] * 1000   # 張 → 股
+                    df_day = df_day[(df_day.index.date >= hist_start) &
+                                    (df_day.index.date <= hist_end)]
+                    if len(df_day) >= 20:
+                        results[code] = df_day
+                    else:
+                        fallback_codes.append(code)
+                except Exception:
+                    fallback_codes.append(code)
+
+                if idx % 10 == 0 or idx == total:
+                    print(f"     kbars: {idx}/{total} 檔"
+                          f"（成功 {len(results)} / 備援 {len(fallback_codes)}）", end="\r")
+            print()
+            print(f"  ✅ kbars 完成：{len(results)} 檔 | 備援 {len(fallback_codes)} 檔")
+    else:
+        # 沒有 api 物件（非盤時測試），全走 TWSE
+        fallback_codes = list(codes)
+
+    # ── 階段 2：TWSE / TPEX 備援 ──────────────────
+    if fallback_codes:
+        print(f"  🔄 TWSE/TPEX 補抓 {len(fallback_codes)} 檔...")
+        import warnings
+        warnings.filterwarnings("ignore")
+        for i, code in enumerate(fallback_codes, 1):
+            df = _fetch_twse_stock(code, hist_start, hist_end)
+            if df is not None:
+                results[code] = df
+            if i % 5 == 0 or i == len(fallback_codes):
+                print(f"     TWSE: {i}/{len(fallback_codes)} 檔，累計成功 {len(results)} 檔...", end="\r")
+        print()
+
+    print(f"  ✅ 歷史資料：{len(results)}/{len(codes)} 檔")
     return results
 
 
@@ -888,21 +1294,7 @@ def main():
     print(f"  畫面刷新：每 {args.refresh} 秒")
     print("═"*65 + "\n")
 
-    # 1. 下載歷史資料，預算技術指標基準
-    hist    = fetch_history(codes)
-    if not hist:
-        print("  ❌ 無法取得歷史資料")
-        sys.exit(1)
-
-    print(f"\n  ⚙️  預算技術指標基準...")
-    bases = {}
-    for code, df in hist.items():
-        b = build_base(df)
-        if b:
-            bases[code] = b
-    print(f"  ✅ {len(bases)} 檔基準預算完成")
-
-    # 2. 連線 Shioaji
+    # 1. 連線 Shioaji（提前到 fetch_history 前，讓 kbars 可用）
     api_key    = os.environ.get("SJ_API_KEY", "").strip()
     secret_key = os.environ.get("SJ_SECRET_KEY", "").strip()
     if not api_key:
@@ -921,14 +1313,31 @@ def main():
     lq = LiveQuote()
     if not lq.login(api_key, secret_key):
         sys.exit(1)
+
+    # 2. 下載歷史資料（永豐金 kbars 主源，TWSE 備援），預算技術指標基準
+    hist = fetch_history(codes, api=lq.get_api())
+    if not hist:
+        print("  ❌ 無法取得歷史資料（kbars 與 TWSE 均失敗）")
+        print("     請確認網路可連線至 www.twse.com.tw")
+        sys.exit(1)
+
+    print(f"\n  ⚙️  預算技術指標基準...")
+    bases = {}
+    for code, df in hist.items():
+        b = build_base(df)
+        if b:
+            bases[code] = b
+    print(f"  ✅ {len(bases)} 檔基準預算完成")
+
+    # 3. 訂閱即時 Tick
     lq.subscribe(list(bases.keys()), bases)
 
-    # 3. 部位管理
+    # 4. 部位管理
     pm     = PositionManager(stop_loss_pct=args.stop_loss)
     alerts = []
     scan_n = 0
 
-    # 4. 主迴圈（畫面刷新，資料由 Shioaji Tick callback 自動更新）
+    # 5. 主迴圈（畫面刷新，資料由 Shioaji Tick callback 自動更新）
     try:
         while True:
             now = datetime.datetime.now()

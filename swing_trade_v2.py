@@ -113,14 +113,14 @@ MIN_AVG_VOL  = 3000      # 5 日均量最低門檻（張）
 
 STRATEGY_NAMES = {
     # ── 原有十個策略 ──
-    "A":  "多 均線突破+爆量",   "AS": "空 均線死亡+爆量",
+    "A":  "多 均線突破",        "AS": "空 均線死亡+爆量",
     "B":  "多 開盤跳空向上",    "BS": "空 開盤跳空向下",
     "C":  "多 RSI超賣反彈",     "CS": "空 RSI超買反轉",
     "D":  "多 突破近5日高點",   "DS": "空 跌破近5日低點",
     "E":  "多 強勢連漲",        "ES": "空 弱勢連跌",
     # ── 均量類 ──
     "F":  "多 均量擴張+上漲",   "FS": "空 均量萎縮+下跌",
-    "G":  "多 縮量後爆量上漲",  "GS": "空 縮量後爆量下跌",
+    "G":  "多 縮量後上漲",      "GS": "空 縮量後爆量下跌",
     # ── K棒型態 ──
     "H":  "多 鎚子K",           "HS": "空 射擊之星",
     "I":  "多 吞噬陽線",        "IS": "空 吞噬陰線",
@@ -136,6 +136,8 @@ STRATEGY_NAMES = {
     "Q":  "多 InsideBar突破",   "QS": "空 InsideBar跌破",
     # ── 均值回歸（新增）──
     "R":  "多 BIAS超跌反彈",    "RS": "空 BIAS超漲回落",
+    # ── 大跳空低量（新增）──
+    "B2": "多 大跳空(≥5%)+低量(≥0.8x)",
 }
 
 # 預先建立策略順序索引（向量化與多執行緒共用）
@@ -217,6 +219,121 @@ COMBO_PRESETS: dict[str, list[str]] = {
         # ▸ 大樣本穩健型
         "M+R",        # 49.5%  EV+0.066%  n=208
     ],
+    # ── 多方（v3：2400 日長期回測 + 停損敏感度驗證，2026-04-24）──────────
+    # 篩選門檻：n ≥ 100 樣本充足、正 EV、含停損 -7% 驗證
+    # 建議搭配 --stop-loss 7（預設值），EV 幾乎等同無停損但有尾端保護
+    "long3": [
+        # ▸ TIER 1 明星組合（實戰首選）
+        "K+L+R",      # 49.4%  EV+0.576%  n=332  (無停損) | -7%: EV+0.714%  n=256
+        "C+K+R",      # 56.3%  EV+0.458%  n=174  (無停損) | -7%: EV+0.684%  n=126
+        # ▸ TIER 2 輔助組合
+        "B+R",        # 51.4%  EV+0.252%  n=208  (無停損) | -7%: EV+0.274%  n=150
+        "B+M+R",      # 49.7%  EV+0.173%  n=165  (無停損)
+        # ▸ 大樣本基礎型（訊號頻繁但邊際正 EV）
+        "K+M+R",      # 48.4%  EV+0.163%  n=1616
+        "K+R",        # 48.3%  EV+0.162%  n=1662
+    ],
+    # ── 空方（v3：2400 日長期回測 + 停損敏感度驗證，2026-04-24）──────────
+    # 篩選門檻：n ≥ 100 樣本充足、正 EV、尾端風險 < 15%
+    # ✅ 停損敏感度已測（compare_stoploss.py --direction short）
+    #   ▸ BS 家族：-7% 停損 EV 幾乎等同無停損（台股 ±10% 限制下尾端自然封頂 -10.3%）
+    #   ▸ FS 家族：-7% 會砍到正常賠錢單，建議 -10% 或不設停損
+    # ⚠️ 排除含 GS/KS+RS 的高尾端風險組合（單筆虧損可達 -26% ~ -34%）
+    "short3": [
+        # ▸ TIER 1 高 EV 明星組合（BS+R 家族，勝率 65%+，-7% 停損最佳）
+        "BS+GS",       # 62.7%  EV+1.905%  n=102  max -10.30%  ⭐EV 之王    | -7%: EV+1.823%
+        "BS+MS+RS",    # 68.8%  EV+1.672%  n=173  max -10.34%  ⭐勝率之王  | -7%: EV+1.695%
+        "BS+RS",       # 67.7%  EV+1.550%  n=189  max -10.34%              | -7%: EV+1.534%
+        # ▸ TIER 1 低尾端風險優選（NS 訊號降低尾端風險，-7% 停損不觸發）
+        "BS+FS+NS",    # 60.2%  EV+0.971%  n=166  max  -5.66%  ⭐風控最佳  | -7% 等同無停損
+        # ▸ TIER 2 FS 家族（與 BS 互補，建議 -10% 或不設停損）
+        "FS+MS+RS",    # 61.5%  EV+0.887%  n=117  max -12.30%              | -7%: EV+0.689% ⚠ 建議 -10%
+        "FS+RS",       # 62.8%  EV+0.886%  n=145  max -12.30%              | -7%: EV+0.756% ⚠ 建議 -10%
+        # ▸ TIER 3 大樣本穩健型（EV 中等但訊號頻繁，-7% 與無停損相近）
+        "BS+KS",       # 56.9%  EV+0.589%  n=274  max -10.34%              | -7%: EV+0.583%
+        "AS+BS+FS",    # 53.8%  EV+0.570%  n=474  max -11.80%              | -7%: EV+0.458%
+    ],
+    # ── long3_lean：多方精簡版（2400日回測，B多已移除爆量條件，2026-04-25）──────────
+    # 注意：B2多觸發時 B多必然同時觸發（B2 gap≥5% ⊃ B gap≥2%）
+    #       故 B2+R = B+R+B2（同一批交易），preset 只保留 B2+X 形式，避免重複
+    "long3_lean": [
+        # ▸ TIER 1  EV ≥ 2%（exit_day=3 最佳）
+        "M+R+B2",     # 71.9%  EV+2.995%  n=128   ⭐⭐勝率王＋大EV
+        "R+B2",       # 70.3%  EV+2.704%  n=155   ⭐（≡ B+R+B2）
+        "B+K+R",      # 68.7%  EV+2.585%  n=614   ⭐大樣本高EV
+        "B+K+L",      # 69.4%  EV+2.435%  n=229   ⭐高勝率
+        "B2+K",       # 58.9%  EV+2.238%  n=107   ⭐BB下軌確認（≡ B+K+B2）
+        # ▸ TIER 2  EV 1–2%
+        "B+F+L",      # 71.0%  EV+2.025%  n=217   均量擴張＋KD超賣
+        "B+F+K",      # 65.2%  EV+1.996%  n=391   均量擴張＋布林下軌
+        "B+L+R",      # 67.8%  EV+1.778%  n=447   三指標共振
+        "B+F+R",      # 67.8%  EV+1.630%  n=594
+        "K+L+R",      # 63.7%  EV+1.613%  n=347   純技術指標（無B）
+        "B+M+R",      # 62.8%  EV+1.418%  n=1481  大樣本穩健
+        # ▸ TIER 3  大樣本基線（EV 0.5–1.5%）
+        "B+R",        # 63.6%  EV+1.379%  n=1717  最大樣本基線
+        "B+K",        # 60.4%  EV+1.484%  n=1081  高頻觸發
+        "K+R",        # 55.5%  EV+0.738%  n=1696  純指標大樣本
+        "B2+M",       # 56.0%  EV+0.996%  n=291   ≡ B+M+B2
+    ],
+    # ── long_trend：多方趨勢追蹤版（2400日回測，2026-04-26）─────────────────────
+    # 適用時機：大盤急彈後「回穩上漲期」，此時 long3_lean 的超跌指標（R/K/M/L）
+    #           訊號歸零，但趨勢指標（A/N/E/D/F）訊號量反而增加 1.4–3.7 倍。
+    # 核心邏輯：B（跳空缺口）= 觸發器，趨勢策略（A/N/E/D/F）= 結構確認
+    #           純趨勢策略 EV 全為負；加入 B 後轉正（跳空確認市場有真實新增買盤）
+    # 特性：WR 44–47%（vs long3_lean 55–72%），EV 較低（0.25–0.50%）
+    #       屬「趨勢跟蹤」型：少贏但大贏，嚴守停損為必要條件
+    # 注意：B+A+N ≡ B+N（N 已隱含 MA5>MA20），B+A+E ≡ B+E（同理），不重複列出
+    # ★ B2（跳空≥5%）= B（跳空≥2%）的強化版，訊號約佔 B 的 11–24%，EV 全面提升 +0.2～+0.8%
+    #   → 每筆 B 訊號若同時觸發 B2，視為強化訊號，優先關注
+    "long_trend": [
+        # ▸ TIER 0  B2 強化版（缺口≥5%，EV ≥ 0.90%）  ← B2 觸發時優先使用
+        "B2+N+F",   # 51.1%  EV+0.955%  n=227   ⭐⭐均量擴張＋多頭回測（B版+0.76%）
+        "B2+F",     # 48.6%  EV+0.932%  n=1699  ⭐大樣本基線（B版+0.51%）
+        "B2+A+D",   # 47.6%  EV+0.567%  n=2319  均線多頭＋突破前高（B版+0.41%）
+        "B2+A",     # 47.7%  EV+0.607%  n=2732  均線多頭大樣本（B版+0.44%）
+        "B2+D",     # 47.1%  EV+0.472%  n=2874  突破前高大樣本（B版+0.39%）
+        "B2+N",     # 47.4%  EV+0.272%  n=614   多頭回測MA5（B版+0.17%）
+        # ▸ TIER 1  EV ≥ 0.40%  （B 缺口≥2% 通用版）
+        "B+N+F",    # 44.3%  EV+0.192%  n=2054  均量擴張＋多頭回測MA5確認
+        "B+E+F",    # 45.7%  EV+0.478%  n=904   強勢連漲＋均量擴張
+        "B+F",      # 46.8%  EV+0.419%  n=11354 ⭐大樣本基線，均量擴張確認趨勢
+        "B+E+D",    # 44.7%  EV+0.414%  n=1103  強勢連漲＋突破近5日高點
+        # ▸ TIER 2  EV 0.10–0.40%
+        "B+E",      # 46.1%  EV+0.197%  n=1941  強勢連漲（MA5>MA10>MA20）
+        "B+N",      # 44.6%  EV+0.105%  n=4577  多頭排列回測MA5後站回
+        "B+A+D",    # 45.2%  EV+0.153%  n=9849  均線多頭（MA5>MA20）＋突破前高
+        "B+N+D",    # 46.6%  EV+0.308%  n=1286  多頭回測＋突破前高（勝率最高）
+        # ▸ TIER 3  大樣本基線
+        "B+A",      # 45.1%  EV+0.168%  n=17992 均線多頭大樣本
+        "B+D",      # 44.9%  EV+0.084%  n=13047 突破前高大樣本
+    ],
+    # ── short3_lean：空方精簡版（從 short3 2400日回測去除多餘組合後保留 14 個）──
+    # 移除原則：
+    #   ① 三策略 EV < 子兩策略 EV（加了策略反而變差）
+    #      → FS+MS+RS、BS+KS+MS、BS+CS+KS、BS+DS+FS、BS+CS+DS、AS+FS+GS、KS+MS+RS、KS+LS+RS 全移除
+    #   ② 兩策略已被 EV 更高的三策略版本涵蓋
+    #      → BS+FS/BS+NS/BS+DS/AS+GS/DS+GS 移除（被 BS+FS+NS、BS+DS+NS、AS+DS+GS 取代）
+    # 停損建議：BS 家族 -7%；FS 家族建議 -10% 或不設停損（尾端可達 -12%）
+    "short3_lean": [
+        # ▸ TIER 1 高 EV 明星組合（EV ≥ 1%，勝率 60%+）
+        "BS+GS",       # 63.0%  EV+1.878%  n=108  ⭐EV 之王
+        "BS+MS+RS",    # 65.3%  EV+1.676%  n=170  ⭐勝率之王
+        "BS+RS",       # 64.3%  EV+1.556%  n=185  BS+MS+RS 較寬版（無 MS 條件）
+        "BS+FS+NS",    # 60.5%  EV+0.999%  n=172  ⭐風控最佳（max -5.66%）
+        # ▸ TIER 2 良好組合（EV 0.5–1.0%）
+        "BS+FS+JS",    # 55.2%  EV+0.839%  n=105  BS+FS 強化版（+JS 過濾）
+        "AS+DS+GS",    # 55.3%  EV+0.780%  n=228  取代 AS+GS / DS+GS
+        "FS+RS",       # 61.1%  EV+0.767%  n=144  ⚠ 建議 -10% 停損（尾端 -12%）
+        "BS+KS",       # 56.3%  EV+0.561%  n=279  +MS/+CS 版均劣於此
+        "BS+OS",       # 55.2%  EV+0.531%  n=116
+        # ▸ TIER 3 選擇性保留（EV 0.3–0.5%，有特定優勢）
+        "BS+DS+NS",    # 56.6%  EV+0.460%  n=389  取代 BS+DS / BS+NS
+        "CS+FS+JS",    # 47.1%  EV+0.415%  n=136
+        "AS+BS+DS",    # 51.6%  EV+0.407%  n=1256 最大樣本，統計穩健
+        "BS+CS+JS",    # 53.1%  EV+0.371%  n=147
+        "BS+MS",       # 49.9%  EV+0.333%  n=678  大樣本基線
+    ],
 }
 
 # ── all2：long2 + short2 + 本次回測所有正EV且樣本充足的補充組合 ────
@@ -259,19 +376,76 @@ COMBO_PRESETS["all2"] = (
     COMBO_PRESETS["short2"] + _short2_extra
 )
 
+# ── all3_lean：long3_lean + short3_lean 精簡合集 ──
+COMBO_PRESETS["all3_lean"] = (
+    COMBO_PRESETS["long3_lean"] + COMBO_PRESETS["short3_lean"]
+)
+
+# ══════════════════════════════════════════════
+# 各 preset 的建議出場日（--combo 模式下使用）
+# 來源：2400 日回測 exit-day 1/2/3 敏感度分析（2026-04-25）
+# --exit-day 手動指定時永遠優先於此設定
+# ══════════════════════════════════════════════
+PRESET_EXIT_DAY: dict[str, int] = {
+    # 多方：exit-day=3 全面最佳（K+L+R EV +0.63→+3.01%，K+R +0.14→+1.78%）
+    "long3_lean":  3,
+    # 多方趨勢：exit-day=3（B+trend 組合回測最佳出場日）
+    "long_trend":  3,
+    # 空方：exit-day=1 整體最穩
+    # （BS+GS/AS+DS+GS 在 D2/D3 變負；D1 收盤含漲跌停板邏輯最能保留獲利）
+    "short3_lean": 1,
+    # 混合：交由長空各自決定（見下方 _run_long/_run_short 分別查表）
+    "all3_lean":   None,
+    # 其他 preset 未設定 → fallback 到 --exit-day 預設值（2）
+}
+
+
+# ── allforall：6 個 preset 全集（long1+long2+long3+short1+short2+short3）──
+# 用途：一次掃描全部歷代策略組合，做大規模回測或交叉比較
+# ⚠️ 注意事項：
+#   1. long1 全為負 EV（v1 舊版 90 日回測），保留作為對照組
+#   2. 自動去重，保留首次出現順序（v3 > v2 > v1 越新越優先）
+#   3. 不同 preset 間有重疊組合（如 B+R、BS+RS）會只算一次
+def _dedup_keep_order(seq: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for x in seq:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+COMBO_PRESETS["allforall"] = _dedup_keep_order(
+    # 多方：v3（精選）→ v2（中期）→ v1（舊版負 EV，僅供對照）
+    COMBO_PRESETS["long3"]  + COMBO_PRESETS["long2"]  + COMBO_PRESETS["long1"] +
+    # 空方：v3（精選）→ v2（中期）→ v1（90 日舊版）
+    COMBO_PRESETS["short3"] + COMBO_PRESETS["short2"] + COMBO_PRESETS["short1"]
+)
+
 
 def resolve_preset(preset: str) -> list[str]:
     """
     將 --preset 名稱展開成組合清單。
+    支援逗號分隔的多 preset，回傳合併（去重保序）清單。
+    例如：--preset long3_lean,long_trend
     不存在時印出可用清單並回傳空 list。
     """
-    key = preset.strip().lower()
-    if key in COMBO_PRESETS:
-        return COMBO_PRESETS[key]
-    print(f"  ❌ 找不到 preset '{preset}'，可用清單：")
-    for name, combos in COMBO_PRESETS.items():
-        print(f"     {name}: {', '.join(combos)}")
-    return []
+    names = [p.strip().lower() for p in preset.split(",") if p.strip()]
+    merged: list[str] = []
+    seen:   set[str]  = set()
+    ok = True
+    for name in names:
+        if name not in COMBO_PRESETS:
+            print(f"  ❌ 找不到 preset '{name}'，可用清單：")
+            for pname in COMBO_PRESETS:
+                print(f"     {pname}")
+            ok = False
+            continue
+        for combo in COMBO_PRESETS[name]:
+            if combo not in seen:
+                merged.append(combo)
+                seen.add(combo)
+    return merged if ok else []
 
 
 # ══════════════════════════════════════════════
@@ -348,6 +522,23 @@ def init_db() -> sqlite3.Connection:
 
     CREATE INDEX IF NOT EXISTS idx_scans_date ON scans(scan_date);
     CREATE INDEX IF NOT EXISTS idx_scans_code ON scans(code);
+
+    -- 日K快取（避免重複抓 sinopac/twse；可用 sinopac 一次抓滿，後續用 twse 增量補）
+    CREATE TABLE IF NOT EXISTS kbars_daily (
+        code   TEXT NOT NULL,
+        date   TEXT NOT NULL,                  -- YYYY-MM-DD
+        open   REAL,
+        high   REAL,
+        low    REAL,
+        close  REAL,
+        vol_k  REAL,                           -- 千股 / 張
+        volume REAL,                           -- 股數
+        source TEXT,                           -- 'sinopac' / 'twse' / 'yfinance'
+        updated_at TEXT DEFAULT (datetime('now','localtime')),
+        PRIMARY KEY (code, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_kbars_code_date
+        ON kbars_daily(code, date);
     """)
     conn.commit()
     return conn
@@ -645,95 +836,84 @@ def fetch_data(codes: list, days: int = DEFAULT_DAYS) -> dict:
 # ══════════════════════════════════════════════
 # TWSE / TPEX 官方日K 備援下載
 # ══════════════════════════════════════════════
-def _fetch_official_daily(code: str,
-                           start_date: datetime.date,
-                           end_date: datetime.date):
-    """
-    從 TWSE（上市）或 TPEX（上櫃）抓官方日K作為備援。
-    回傳 DatetimeIndex DataFrame（Open/High/Low/Close/Volume/Vol_K）
-    或 None（找不到資料）。
-    """
-    import warnings as _w
-    _w.filterwarnings("ignore", message="Unverified HTTPS")
+import warnings as _ssl_warn
+_ssl_warn.filterwarnings("ignore", message="Unverified HTTPS")
 
-    # 決定要抓哪幾個月
-    months: list = []
-    cur = start_date.replace(day=1)
-    while cur <= end_date:
-        months.append(cur.strftime("%Y%m"))
-        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
-
-    def _twse(yyyymm: str) -> list:
-        url = (f"https://www.twse.com.tw/exchangeReport/STOCK_DAY"
-               f"?response=json&date={yyyymm}01&stockNo={code}")
-        try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"},
-                             timeout=12, verify=False)
-            data = r.json()
-            if data.get("stat") != "OK":
-                return []
-            rows = []
-            for row in data.get("data", []):
-                try:
-                    p = row[0].replace("/", "-").split("-")
-                    dt = f"{int(p[0])+1911}-{p[1]}-{p[2]}"
-                    rows.append({
-                        "date":  dt,
-                        "Open":  float(row[3].replace(",", "")),
-                        "High":  float(row[4].replace(",", "")),
-                        "Low":   float(row[5].replace(",", "")),
-                        "Close": float(row[6].replace(",", "")),
-                        "Vol_K": int(row[1].replace(",", "")) // 1000,
-                    })
-                except Exception:
-                    continue
-            return rows
-        except Exception:
+def _fetch_twse_month(code: str, yyyymm: str,
+                      session: "requests.Session | None" = None) -> list:
+    """抓 TWSE 上市股票單月日K，回傳 list of row-dict"""
+    url = (f"https://www.twse.com.tw/exchangeReport/STOCK_DAY"
+           f"?response=json&date={yyyymm}01&stockNo={code}")
+    getter = session.get if session else requests.get
+    try:
+        r = getter(url, timeout=12, verify=False)
+        data = r.json()
+        if data.get("stat") != "OK":
             return []
+        rows = []
+        for row in data.get("data", []):
+            try:
+                p = row[0].replace("/", "-").split("-")
+                rows.append({
+                    "date":  f"{int(p[0])+1911}-{p[1]}-{p[2]}",
+                    "Open":  float(row[3].replace(",", "")),
+                    "High":  float(row[4].replace(",", "")),
+                    "Low":   float(row[5].replace(",", "")),
+                    "Close": float(row[6].replace(",", "")),
+                    "Vol_K": int(row[1].replace(",", "")) // 1000,
+                })
+            except Exception:
+                continue
+        return rows
+    except Exception:
+        return []
 
-    def _tpex(yyyymm: str) -> list:
-        roc_y = int(yyyymm[:4]) - 1911
-        mon   = yyyymm[4:]
-        url = (f"https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/"
-               f"st43_result.php?l=zh-tw&d={mon}/{roc_y}&s={code}&o=json")
-        try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"},
-                             timeout=12, verify=False)
-            data = r.json()
-            if not data.get("iTotalRecords", 0):
-                return []
-            rows = []
-            for row in data.get("aaData", []):
-                try:
-                    p = row[0].replace("/", "-").split("-")
-                    dt = f"{int(p[0])+1911}-{p[1]}-{p[2]}"
-                    rows.append({
-                        "date":  dt,
-                        "Open":  float(row[2].replace(",", "")),
-                        "High":  float(row[3].replace(",", "")),
-                        "Low":   float(row[4].replace(",", "")),
-                        "Close": float(row[5].replace(",", "")),
-                        "Vol_K": int(row[1].replace(",", "")) // 1000,
-                    })
-                except Exception:
-                    continue
-            return rows
-        except Exception:
+
+def _fetch_tpex_month(code: str, yyyymm: str,
+                      session: "requests.Session | None" = None) -> list:
+    """抓 TPEX 上櫃股票單月日K，回傳 list of row-dict"""
+    roc_y = int(yyyymm[:4]) - 1911
+    mon   = yyyymm[4:]
+    url = (f"https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/"
+           f"st43_result.php?l=zh-tw&d={mon}/{roc_y}&s={code}&o=json")
+    getter = session.get if session else requests.get
+    try:
+        r = getter(url, timeout=12, verify=False)
+        data = r.json()
+        if not data.get("iTotalRecords", 0):
             return []
+        rows = []
+        for row in data.get("aaData", []):
+            try:
+                p = row[0].replace("/", "-").split("-")
+                rows.append({
+                    "date":  f"{int(p[0])+1911}-{p[1]}-{p[2]}",
+                    "Open":  float(row[2].replace(",", "")),
+                    "High":  float(row[3].replace(",", "")),
+                    "Low":   float(row[4].replace(",", "")),
+                    "Close": float(row[5].replace(",", "")),
+                    "Vol_K": int(row[1].replace(",", "")) // 1000,
+                })
+            except Exception:
+                continue
+        return rows
+    except Exception:
+        return []
 
-    all_rows: list = []
-    for ym in months:
-        rows = _twse(ym)
-        if rows:
-            all_rows.extend(rows)
-        else:
-            all_rows.extend(_tpex(ym))
-        time.sleep(0.25)   # 避免 rate limit
 
-    if not all_rows:
+def _fetch_official_month(code: str, yyyymm: str,
+                          session: "requests.Session | None" = None) -> list:
+    """TWSE 優先，失敗改 TPEX（單月）"""
+    rows = _fetch_twse_month(code, yyyymm, session=session)
+    return rows if rows else _fetch_tpex_month(code, yyyymm, session=session)
+
+
+def _rows_to_df(rows: list, start_date: datetime.date,
+                end_date: datetime.date):
+    """把 row-dict list 整理成 DatetimeIndex DataFrame，失敗回傳 None"""
+    if not rows:
         return None
-
-    df = pd.DataFrame(all_rows)
+    df = pd.DataFrame(rows)
     df = df[(df["date"] >= str(start_date)) & (df["date"] <= str(end_date))]
     if df.empty:
         return None
@@ -741,8 +921,379 @@ def _fetch_official_daily(code: str,
     df.index = pd.to_datetime(df["date"])
     df.index.name = None
     df = df.drop(columns=["date"])
-    df["Volume"] = df["Vol_K"] * 1000   # 張 → 股（相容下游欄位）
+    df["Volume"] = df["Vol_K"] * 1000
     return df
+
+
+def _fetch_official_daily(code: str,
+                           start_date: datetime.date,
+                           end_date: datetime.date):
+    """
+    單一股票：循序抓所有月份後整理成 DataFrame。
+    （fetch_data_sinopac 的 Step 3 改用扁平並行；此函式保留給 --diagnose 等單股情境）
+    """
+    months: list = []
+    cur = start_date.replace(day=1)
+    while cur <= end_date:
+        months.append(cur.strftime("%Y%m"))
+        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
+
+    all_rows: list = []
+    for ym in months:
+        all_rows.extend(_fetch_official_month(code, ym))
+
+    return _rows_to_df(all_rows, start_date, end_date)
+
+
+# ══════════════════════════════════════════════
+# TWSE/TPEX 純官方資料下載（不需 shioaji 帳號、不依賴 yfinance）
+# ══════════════════════════════════════════════
+def fetch_data_twse(codes: list, days: int = DEFAULT_DAYS,
+                    workers: int = 20) -> dict:
+    """
+    使用 TWSE / TPEX 官方公開 API 下載歷史日 K。
+      - 上市股 → twse.com.tw exchangeReport/STOCK_DAY
+      - 上櫃股 → tpex.org.tw st43_result.php
+      - 不需登入帳號，無需 yfinance
+      - API 限制：每月 1 次請求 / 檔，故大量股票會以 (code × month) 扁平並行加速
+
+    Args:
+      codes:    股票代號清單（不含 .TW / .TWO）
+      days:     回測/分析天數（會額外加 buffer）
+      workers:  並行 worker 數，預設 20（不要太高，TWSE 會擋）
+
+    Returns:
+      dict[code -> DataFrame(OHLCV)]
+    """
+    if not codes:
+        return {}
+
+    _tz_tw    = datetime.timezone(datetime.timedelta(hours=8))
+    _now_tw   = datetime.datetime.now(_tz_tw)
+    _today    = _now_tw.date()
+    _open_tw  = _now_tw.replace(hour=9,  minute=0,  second=0, microsecond=0)
+    _close_tw = _now_tw.replace(hour=14, minute=30, second=0, microsecond=0)
+
+    # TWSE 通常 14:00 後才有完整當日資料；保險起見以昨日為終點
+    if _open_tw <= _now_tw < _close_tw:
+        print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，盤中執行"
+              f"——使用昨日（{_today - datetime.timedelta(days=1)}）作為資料終點")
+        hist_end = _today - datetime.timedelta(days=1)
+    else:
+        hist_end = _today
+
+    buf        = days + 40
+    hist_start = _today - datetime.timedelta(days=buf)
+
+    # 列出所有需要抓的月份
+    months: list = []
+    cur = hist_start.replace(day=1)
+    while cur <= hist_end:
+        months.append(cur.strftime("%Y%m"))
+        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
+
+    n_codes  = len(codes)
+    n_months = len(months)
+    n_tasks  = n_codes * n_months
+    _tw      = max(1, min(workers, n_tasks))
+    est_sec  = n_tasks * 0.4 / _tw
+
+    print(f"  📥 TWSE/TPEX 官方 API：{n_codes} 檔 × {n_months} 個月 = "
+          f"{n_tasks} 筆請求（{_tw} workers，估計 {est_sec:.0f} 秒）")
+    print(f"     區間 {hist_start} ~ {hist_end}")
+
+    from collections import defaultdict
+    code_rows: dict = defaultdict(list)
+    counter = {"done": 0}
+    lock    = threading.Lock()
+    report_every = max(1, n_tasks // 20)
+
+    # thread-local Session：每 thread 一條 keep-alive，減少 TLS handshake
+    _tls = threading.local()
+
+    def _get_session() -> requests.Session:
+        if not hasattr(_tls, "session"):
+            _tls.session = requests.Session()
+            _tls.session.headers.update({"User-Agent": "Mozilla/5.0"})
+            _tls.session.verify = False
+        return _tls.session
+
+    def _fetch_task(task: tuple) -> None:
+        code, ym = task
+        sess = _get_session()
+        rows = _fetch_official_month(code, ym, session=sess)
+        with lock:
+            counter["done"] += 1
+            done_now = counter["done"]
+        if rows:
+            code_rows[code].extend(rows)
+        if done_now % report_every == 0 or done_now == n_tasks:
+            pct = done_now * 100 // n_tasks
+            print(f"  ── TWSE 進度：{done_now}/{n_tasks} 筆（{pct}%）")
+
+    # 月份優先排序：避免對同一股票連續轟炸
+    tasks = [(c, ym) for ym in months for c in codes]
+    with ThreadPoolExecutor(max_workers=_tw) as pool:
+        list(pool.map(_fetch_task, tasks))
+
+    # 彙整成 dict[code -> DataFrame]
+    results: dict = {}
+    for code in codes:
+        df = _rows_to_df(code_rows.get(code, []), hist_start, hist_end)
+        if df is not None and len(df) >= 22:
+            results[code] = df
+
+    print(f"  ✅ TWSE/TPEX 完成：{len(results)}/{n_codes} 檔成功")
+    if results:
+        _check_data_freshness(results, source="TWSE/TPEX")
+    return results
+
+
+# ══════════════════════════════════════════════
+# SQLite K bar 快取（kbars_daily 表）
+# 用法：先用 sinopac 抓滿，後續用 twse 增量補
+# ══════════════════════════════════════════════
+def load_kbars_cache(conn: sqlite3.Connection, codes: list,
+                     start_date: datetime.date,
+                     end_date: datetime.date) -> dict:
+    """
+    從 SQLite 讀取 [start_date, end_date] 區間的快取日 K，
+    回傳 dict[code -> DataFrame]（DatetimeIndex，欄位 OHLC + Vol_K + Volume）。
+    沒命中或無資料的 code 不會出現在 dict 中。
+    """
+    if not codes:
+        return {}
+    results: dict = {}
+    # SQLite IN 子句長度限制（SQLITE_LIMIT_VARIABLE_NUMBER），分批讀
+    chunk = 500
+    for i in range(0, len(codes), chunk):
+        sub = codes[i:i+chunk]
+        ph  = ",".join("?" * len(sub))
+        rows = conn.execute(
+            f"""
+            SELECT code, date, open, high, low, close, vol_k, volume
+              FROM kbars_daily
+             WHERE code IN ({ph})
+               AND date >= ?
+               AND date <= ?
+             ORDER BY code, date
+            """,
+            sub + [str(start_date), str(end_date)],
+        ).fetchall()
+        if not rows:
+            continue
+        from collections import defaultdict
+        bucket: dict = defaultdict(list)
+        for r in rows:
+            bucket[r[0]].append(r)
+        for code, code_rows in bucket.items():
+            df = pd.DataFrame(
+                code_rows,
+                columns=["code", "date", "Open", "High", "Low",
+                         "Close", "Vol_K", "Volume"],
+            )
+            df.index = pd.to_datetime(df["date"])
+            df.index.name = None
+            df = df.drop(columns=["code", "date"])
+            results[code] = df
+    return results
+
+
+def save_kbars_cache(conn: sqlite3.Connection, results: dict,
+                     source: str = "") -> int:
+    """
+    把 fetch 回來的 dict[code -> df] 寫入 kbars_daily（INSERT OR REPLACE）。
+    回傳寫入筆數。
+    """
+    rows: list = []
+    for code, df in results.items():
+        if df is None or len(df) == 0:
+            continue
+        for idx, row in df.iterrows():
+            try:
+                rows.append((
+                    str(code),
+                    idx.strftime("%Y-%m-%d"),
+                    float(row.get("Open",  float("nan"))),
+                    float(row.get("High",  float("nan"))),
+                    float(row.get("Low",   float("nan"))),
+                    float(row.get("Close", float("nan"))),
+                    float(row.get("Vol_K", 0) or 0),
+                    float(row.get("Volume", 0) or 0),
+                    source,
+                ))
+            except Exception:
+                continue
+    if rows:
+        conn.executemany(
+            """
+            INSERT OR REPLACE INTO kbars_daily
+                (code, date, open, high, low, close, vol_k, volume, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        conn.commit()
+    return len(rows)
+
+
+def _merge_into_cache(cached: dict, fresh: dict) -> dict:
+    """把新抓的 fresh 合併進 cached（同日期以 fresh 為準），回傳合併後的 dict。"""
+    out = dict(cached)
+    for code, df in fresh.items():
+        if df is None or len(df) == 0:
+            continue
+        if code in out and out[code] is not None and len(out[code]) > 0:
+            combined = pd.concat([out[code], df])
+            combined = combined[~combined.index.duplicated(keep="last")]
+            out[code] = combined.sort_index()
+        else:
+            out[code] = df.sort_index()
+    return out
+
+
+def fetch_data_cached(codes: list, days: int, datasource: str = "sinopac",
+                      *,
+                      sj_key: str = "", sj_secret: str = "",
+                      cache_only: bool = False,
+                      refresh: bool = False) -> dict:
+    """
+    SQLite 快取 + 增量補抓的協調函式。
+
+    流程：
+      1. 從 kbars_daily 讀取 [today - days - 30, today] 的快取
+      2. 分類每個 code：
+         - 完全沒資料 / 不足  → 全量補（呼叫 datasource 全抓）
+         - 末日 < 昨日       → 增量補（只抓 max(latest)+1 → today）
+         - 已最新            → 不動
+      3. 補完的資料寫回快取，與快取合併後回傳
+
+    Args:
+      codes:      股票代號清單
+      days:       回測/分析所需的天數
+      datasource: 'sinopac' / 'twse' / 'yfinance'
+      sj_key/secret: sinopac 金鑰（datasource=sinopac 時必填）
+      cache_only: 只讀快取，不打遠端（即使有缺口）
+      refresh:    忽略快取，強制重抓全部
+
+    Returns:
+      dict[code -> DataFrame]
+    """
+    if not codes:
+        return {}
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+
+    today        = datetime.date.today()
+    target_start = today - datetime.timedelta(days=days + 30)
+
+    # ── Step 1：讀快取 ──────────────────────────
+    if refresh:
+        cached: dict = {}
+        print(f"  🔄 --refresh-cache：忽略快取，全部重抓")
+    else:
+        cached = load_kbars_cache(conn, codes, target_start, today)
+        if cached:
+            sample_latest = max(
+                df.index[-1].date() for df in cached.values()
+            )
+            print(f"  📦 SQLite 快取命中 {len(cached)}/{len(codes)} 檔"
+                  f"  最新日期 {sample_latest}")
+        else:
+            print(f"  📦 SQLite 快取未命中（共 {len(codes)} 檔）")
+
+    # ── Step 2：分類 ─────────────────────────────
+    full_codes: list = []      # 缺資料（要全量補）
+    inc_codes: list  = []      # 只缺最近幾天（要增量補）
+    inc_from: datetime.date | None = None  # 增量區間起點
+    yesterday = today - datetime.timedelta(days=1)
+    min_required_rows = max(22, min(days, 250) // 2)  # 太少就視為不足
+
+    for code in codes:
+        df = cached.get(code)
+        if df is None or len(df) < min_required_rows:
+            full_codes.append(code)
+            continue
+        latest = df.index[-1].date()
+        if latest < yesterday:
+            inc_codes.append(code)
+            cand = latest + datetime.timedelta(days=1)
+            if inc_from is None or cand < inc_from:
+                inc_from = cand
+
+    print(f"  └── 全量補：{len(full_codes)} 檔  │  "
+          f"增量補：{len(inc_codes)} 檔"
+          + (f"（從 {inc_from}）" if inc_from else "")
+          + f"  │  快取已最新：{len(codes)-len(full_codes)-len(inc_codes)} 檔")
+
+    if cache_only:
+        if full_codes or inc_codes:
+            print(f"  ⏸  --cache-only：不打遠端，直接回傳快取（缺 "
+                  f"{len(full_codes)+len(inc_codes)} 檔不補）")
+        conn.close()
+        return cached
+
+    # ── Step 3：全量補 ──────────────────────────
+    if full_codes:
+        if datasource == "sinopac":
+            if not sj_key or not sj_secret:
+                print(f"  ⚠️  缺 sinopac 金鑰，{len(full_codes)} 檔全量補改用 TWSE")
+                fresh = fetch_data_twse(full_codes, days)
+                src_tag = "twse"
+            else:
+                fresh = fetch_data_sinopac(full_codes, days, sj_key, sj_secret)
+                src_tag = "sinopac"
+        elif datasource == "twse":
+            fresh = fetch_data_twse(full_codes, days)
+            src_tag = "twse"
+        else:
+            fresh = fetch_data(full_codes, days)
+            src_tag = "yfinance"
+
+        n_saved = save_kbars_cache(conn, fresh, source=src_tag)
+        print(f"  💾 全量補寫入快取 {n_saved} 筆 K bar（source={src_tag}）")
+        cached = _merge_into_cache(cached, fresh)
+
+    # ── Step 4：增量補 ──────────────────────────
+    if inc_codes and inc_from is not None:
+        gap_days = (today - inc_from).days + 5  # 抓多一點點 buffer
+        print(f"  🔄 增量補抓 {len(inc_codes)} 檔 × 約 {gap_days} 天 "
+              f"（{inc_from} ~ {today}）")
+
+        if datasource == "sinopac":
+            if not sj_key or not sj_secret:
+                print(f"  ⚠️  缺 sinopac 金鑰，增量補改用 TWSE")
+                fresh = fetch_data_twse(inc_codes, gap_days)
+                src_tag = "twse"
+            else:
+                fresh = fetch_data_sinopac(inc_codes, gap_days, sj_key, sj_secret)
+                src_tag = "sinopac"
+        elif datasource == "twse":
+            fresh = fetch_data_twse(inc_codes, gap_days)
+            src_tag = "twse"
+        else:
+            fresh = fetch_data(inc_codes, gap_days)
+            src_tag = "yfinance"
+
+        n_saved = save_kbars_cache(conn, fresh, source=src_tag)
+        print(f"  💾 增量補寫入快取 {n_saved} 筆 K bar（source={src_tag}）")
+        cached = _merge_into_cache(cached, fresh)
+
+    conn.close()
+
+    # 最後把太舊的截掉，只回傳 [target_start, today] 的部分
+    final: dict = {}
+    for code, df in cached.items():
+        if df is None or len(df) == 0:
+            continue
+        df2 = df[(df.index.date >= target_start) & (df.index.date <= today)]
+        if len(df2) >= 22:
+            final[code] = df2
+
+    if final:
+        _check_data_freshness(final, source=f"快取+{datasource}")
+    return final
 
 
 # ══════════════════════════════════════════════
@@ -787,14 +1338,18 @@ def fetch_data_sinopac(codes: list, days: int,
         print(f"  ❌ 永豐金登入失敗：{e}")
         return {}
 
-    # 等待合約就緒
-    for _wi in range(31):
+    # 輪詢等待合約就緒（與測試腳本相同的做法）
+    print(f"  ⏳ 等待合約載入完成...")
+    for _wi in range(60):
         try:
             if api.Contracts.Stocks["2330"] is not None:
                 break
         except Exception:
             pass
         time.sleep(1)
+    # 合約物件就緒後，再等 5 秒讓 SOLACE session 完全穩定，才能接受 kbars 請求
+    time.sleep(5)
+    print(f"  ✅ 合約載入完成（已等待穩定）")
 
     def _get_contract(code: str):
         for mkt in ("TSE", "OTC"):
@@ -809,7 +1364,7 @@ def fetch_data_sinopac(codes: list, days: int,
         except Exception:
             return None
 
-    # ── Step 2：kbars 下載歷史日K（並行） ────────────────────────
+    # ── Step 2：kbars smoke test → 確認此帳號可用 kbars ─────────────
     print(f"  📥 [1/2] 永豐金 kbars 下載歷史日K（{start_str} ~ {end_str}）...")
     if _market_open:
         print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，尚未收盤"
@@ -817,41 +1372,81 @@ def fetch_data_sinopac(codes: list, days: int,
 
     results: dict = {}
     fallback_codes: list = []
-    _lock = threading.Lock()
+    _kbars_err_sample: list = []
 
-    def _fetch_kbars_one(code: str) -> None:
-        """下載單一股票的分鐘 kbars，聚合成日K，寫入 results"""
+    # 盤中：kbars Request-Reply 頻道不可用，直接略過 smoke test 走備援
+    if _market_open:
+        print(f"  ⏩ 盤中（{_now_tw.strftime('%H:%M')}）略過 kbars，直接走 TWSE/TPEX 備援")
+        fallback_codes = list(codes)
+    else:
+        # 先用 2330 試一筆，確認 kbars 可用，否則直接跳備援
+        _smoke_ok = False
+        _smoke_contract = _get_contract("2330")
+        if _smoke_contract:
+            try:
+                _smoke_kb = api.kbars(
+                    contract=_smoke_contract,
+                    start=str(hist_end - datetime.timedelta(days=5)),
+                    end=str(hist_end),
+                )
+                if _smoke_kb and len(pd.DataFrame({**_smoke_kb})) > 0:
+                    _smoke_ok = True
+                    print(f"  ✅ kbars smoke test 通過，開始下載 {len(codes)} 檔...")
+            except Exception as e:
+                print(f"  ⚠️  kbars smoke test 失敗（{type(e).__name__}: {e}）"
+                      f"，全部切換 TWSE 備援")
+
+        if not _smoke_ok:
+            fallback_codes = list(codes)
+
+    # shioaji api.kbars() 非 thread-safe，必須循序呼叫
+    # smoke test 失敗時 fallback_codes 已含全部 codes，跳過迴圈
+    total = len(codes)
+    for idx, code in enumerate(codes, 1):
+        if code in fallback_codes:       # smoke test 失敗時直接跳過
+            continue
         contract = _get_contract(code)
         if contract is None:
-            with _lock:
-                fallback_codes.append(code)
-            return
+            fallback_codes.append(code)
+            continue
 
         kb = None
-        for freq_kwarg in [{"frequency": "D"}, {}]:
-            try:
-                kb = api.kbars(contract=contract,
-                               start=start_str, end=end_str,
-                               **freq_kwarg)
+        last_err = None
+        # 外層 retry：SOLACE "Not ready" 時重試（最多 3 次，間隔 1s）
+        for _attempt in range(3):
+            for freq_kwarg in [{"frequency": "D"}, {}]:
+                try:
+                    kb = api.kbars(contract=contract,
+                                   start=start_str, end=end_str,
+                                   **freq_kwarg)
+                    break
+                except TypeError as te:
+                    if "frequency" in str(te):
+                        continue
+                    last_err = te
+                    break
+                except Exception as e:
+                    last_err = e
+                    break
+            if kb is not None:
                 break
-            except TypeError as te:
-                if "frequency" in str(te):
-                    continue
-                break
-            except Exception:
-                break
+            # Not ready 或暫時性錯誤，等一秒重試
+            if last_err and "Not ready" in str(last_err):
+                time.sleep(1)
+            else:
+                break   # 非暫時性錯誤，不重試
 
         if kb is None:
-            with _lock:
-                fallback_codes.append(code)
-            return
+            fallback_codes.append(code)
+            if last_err and len(_kbars_err_sample) < 3:
+                _kbars_err_sample.append(f"{code}: {type(last_err).__name__}: {last_err}")
+            continue
 
         try:
             df_min = pd.DataFrame({**kb})
             if len(df_min) == 0:
-                with _lock:
-                    fallback_codes.append(code)
-                return
+                fallback_codes.append(code)
+                continue
 
             df_min["ts"]   = pd.to_datetime(df_min["ts"])
             df_min["date"] = df_min["ts"].dt.date
@@ -869,46 +1464,95 @@ def fetch_data_sinopac(codes: list, days: int,
             df_day = df_day.drop(columns=["date"])
             df_day["Volume"] = df_day["Vol_K"] * 1000   # 張 → 股（相容下游）
 
-            # 過濾到指定範圍
             df_day = df_day[(df_day.index.date >= hist_start) &
                             (df_day.index.date <= hist_end)]
 
             if len(df_day) < 5:
-                with _lock:
-                    fallback_codes.append(code)
-                return
-
-            with _lock:
-                results[code] = df_day
-
-        except Exception:
-            with _lock:
                 fallback_codes.append(code)
+                continue
 
-    # 並行下載（max_workers=6，避免 sinopac API 過載）
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        futures = {executor.submit(_fetch_kbars_one, c): c for c in codes}
-        done = 0
-        total = len(codes)
-        for fut in futures:
-            fut.result()
-            done += 1
-            if done % 50 == 0 or done == total:
-                print(f"  ── kbars 進度：{done}/{total} 檔"
-                      f"（成功 {len(results)} / 備援 {len(fallback_codes)}）")
+            results[code] = df_day
+
+        except Exception as e:
+            fallback_codes.append(code)
+            if len(_kbars_err_sample) < 3:
+                _kbars_err_sample.append(f"{code}(parse): {type(e).__name__}: {e}")
+
+        if idx % 50 == 0 or idx == total:
+            print(f"  ── kbars 進度：{idx}/{total} 檔"
+                  f"（成功 {len(results)} / 備援 {len(fallback_codes)}）")
+
+    # 若全部走備援，印出錯誤樣本供診斷
+    if _kbars_err_sample:
+        print(f"  ⚠️  kbars 錯誤樣本（前 {len(_kbars_err_sample)} 筆）：")
+        for s in _kbars_err_sample:
+            print(f"     {s}")
 
     print(f"  ✅ kbars 完成：{len(results)} 檔成功  |  {len(fallback_codes)} 檔切換備援")
 
-    # ── Step 3：TWSE / TPEX 備援 ────────────────────────────────
+    # ── Step 3：TWSE / TPEX 備援（(stock×month) 扁平並行） ──────────
+    # 把所有 (code, month) 組合攤平成一個大任務池，workers 同時打
     if fallback_codes:
-        print(f"  🔄 TWSE/TPEX 官方備援下載 {len(fallback_codes)} 檔...")
+        _fb_months: list = []
+        _cur = hist_start.replace(day=1)
+        while _cur <= hist_end:
+            _fb_months.append(_cur.strftime("%Y%m"))
+            _cur = (_cur + datetime.timedelta(days=32)).replace(day=1)
+
+        n_fb     = len(fallback_codes)
+        n_months = len(_fb_months)
+        n_tasks  = n_fb * n_months
+        _tw      = min(20, n_tasks)
+        est_sec  = n_tasks * 0.4 / max(_tw, 1)
+        print(f"  🔄 TWSE/TPEX 備援：{n_fb} 檔 × {n_months} 個月 = {n_tasks} 筆請求"
+              f"（{_tw} workers，估計 {est_sec:.0f} 秒）...")
+
+        from collections import defaultdict
+        _code_rows: dict = defaultdict(list)
+        _t_done = 0
+        _t_lock = threading.Lock()
+        _report_every = max(1, n_tasks // 20)
+
+        # thread-local Session：每個 thread 各持一個 TCP 連線池，避免重複 handshake
+        _tls = threading.local()
+
+        def _get_session() -> requests.Session:
+            if not hasattr(_tls, "session"):
+                _tls.session = requests.Session()
+                _tls.session.headers.update({"User-Agent": "Mozilla/5.0"})
+                _tls.session.verify = False
+            return _tls.session
+
+        def _fetch_task(task: tuple) -> None:
+            code, ym = task
+            # 用 thread-local session 發請求
+            sess = _get_session()
+            rows = _fetch_official_month(code, ym, session=sess)
+            # Lock 只保護計數器和進度輸出，extend 在 lock 外執行
+            with _t_lock:
+                nonlocal _t_done
+                _t_done += 1
+                done_now = _t_done
+            # extend 不在 lock 內（defaultdict 各 key 獨立，不需鎖）
+            if rows:
+                _code_rows[code].extend(rows)
+            if done_now % _report_every == 0 or done_now == n_tasks:
+                pct = done_now * 100 // n_tasks
+                print(f"  ── 備援進度：{done_now}/{n_tasks} 筆（{pct}%）")
+
+        # 月份優先排序：(月1,股1),(月1,股2),...  避免對同一支股票集中打
+        tasks = [(c, ym) for ym in _fb_months for c in fallback_codes]
+        with ThreadPoolExecutor(max_workers=_tw) as pool:
+            list(pool.map(_fetch_task, tasks))
+
         official_ok = 0
         for code in fallback_codes:
-            df_off = _fetch_official_daily(code, hist_start, hist_end)
+            df_off = _rows_to_df(_code_rows.get(code, []), hist_start, hist_end)
             if df_off is not None and len(df_off) >= 5:
                 results[code] = df_off
                 official_ok += 1
-        print(f"  ✅ TWSE/TPEX 備援：{official_ok}/{len(fallback_codes)} 檔成功")
+
+        print(f"  ✅ TWSE/TPEX 備援：{official_ok}/{n_fb} 檔成功")
 
     if not results:
         try:
@@ -1242,8 +1886,8 @@ def _check(df: pd.DataFrame, i: int,
         prev2_h    = float(prev2["High"]); prev2_l = float(prev2["Low"])
         prev_h_q   = float(prev["High"]);  prev_l_q = float(prev["Low"])
         is_inside  = (prev_h_q < prev2_h) and (prev_l_q > prev2_l)
-        inside_breakout  = is_inside and (close > prev2_h) and (vol_ratio >= vol_mult)
-        inside_breakdown = is_inside and (close < prev2_l) and (vol_ratio >= vol_mult)
+        inside_breakout  = is_inside and (close > prev2_h)                          # Q多：移除爆量
+        inside_breakdown = is_inside and (close < prev2_l) and (vol_ratio >= vol_mult)  # QS空：保留爆量
     else:
         inside_breakout  = False
         inside_breakdown = False
@@ -1256,20 +1900,21 @@ def _check(df: pd.DataFrame, i: int,
 
     return {
         # 原有十個
-        "A":  bool(ma5 > ma20 and vol_ratio >= vol_mult and chg_pct > 0),
+        # ★ 多方已移除爆量條件（量多反而降低多方 EV，見量比分析 2026-04-25）
+        "A":  bool(ma5 > ma20 and chg_pct > 0),                     # 移除 vol_ratio
         "AS": bool(ma5 < ma20 and vol_ratio >= vol_mult and chg_pct < 0),
-        "B":  bool(gap >= 2.0 and vol_ratio >= 1.3 and chg_pct > 0),
+        "B":  bool(gap >= 2.0 and chg_pct > 0),                     # 移除 vol_ratio 1.3x
         "BS": bool(gap <= -2.0 and vol_ratio >= 1.3 and chg_pct < 0),
         "C":  bool(rsi_p < 35 and rsi_t > rsi_p and close > ma5),
         "CS": bool(rsi_p > 65 and rsi_t < rsi_p and close < ma5),
-        "D":  bool(close > hi5 and vol_ratio >= vol_mult),
+        "D":  bool(close > hi5),                                     # 移除 vol_ratio
         "DS": bool(close < lo5 and vol_ratio >= vol_mult),
         "E":  bool(three_up and ma5 > ma10 > ma20 and chg_pct > 0),
         "ES": bool(three_dn and ma5 < ma10 < ma20 and chg_pct < 0),
         # 均量類
-        "F":  bool(vol_expand and vol_ratio >= vol_mult and chg_pct > 0),
+        "F":  bool(vol_expand and chg_pct > 0),                     # 移除單日 vol_ratio，保留均量擴張趨勢
         "FS": bool(vol_shrink and vol_ratio >= vol_mult and chg_pct < 0),
-        "G":  bool(tide_shrink and vol_ratio >= vol_mult and chg_pct > 0),
+        "G":  bool(tide_shrink and chg_pct > 0),                     # 移除爆量，改成縮量後上漲
         "GS": bool(tide_shrink and vol_ratio >= vol_mult and chg_pct < 0),
         # K棒型態
         "H":  bool(hammer),
@@ -1297,6 +1942,8 @@ def _check(df: pd.DataFrame, i: int,
         # 均值回歸（新增）
         "R":  bool(bias_oversold),
         "RS": bool(bias_overbought),
+        # 大跳空低量（新增）
+        "B2": bool(gap >= 5.0 and vol_ratio >= 0.8 and chg_pct > 0),
     }
 
 
@@ -1513,8 +2160,8 @@ def _precompute_signals_vec(sub: pd.DataFrame,
     prev1_h_v  = _shiftf(h, 1); prev1_l_v = _shiftf(l, 1)
     is_inside_v = (prev1_h_v < prev2_h_v) & (prev1_l_v > prev2_l_v)
     with np.errstate(invalid="ignore"):
-        inside_breakout_v  = is_inside_v & (c > prev2_h_v) & (vol_ratio >= vol_mult)
-        inside_breakdown_v = is_inside_v & (c < prev2_l_v) & (vol_ratio >= vol_mult)
+        inside_breakout_v  = is_inside_v & (c > prev2_h_v)                          # Q多：移除爆量
+        inside_breakdown_v = is_inside_v & (c < prev2_l_v) & (vol_ratio >= vol_mult)  # QS空：保留爆量
 
     # ── 均值回歸（新增）────────────────────────────────────
     # R/RS: BIAS 乖離率（對 MA20）
@@ -1523,27 +2170,34 @@ def _precompute_signals_vec(sub: pd.DataFrame,
     bias_oversold_v   = (bias_v < -8) & (chg_pct > 0)
     bias_overbought_v = (bias_v > +8) & (chg_pct < 0)
 
-    # ── 組合成訊號陣列（shape: n × 36，欄位順序 = _STRAT_KEYS）──
+    # ── 大跳空低量（B2）────────────────────────────────────────
+    # B2多：開盤跳空 ≥ 5%（強力缺口）+ 成交量 ≥ 0.8x 均量（不要求爆量）
+    # 設計初衷：補抓後節假日消息面跳空（如 2489 04/01，VolR=0.85x 符合但 B多需 1.3x）
+    b2_long_v = (gap >= 5.0) & (vol_ratio >= 0.8) & (chg_pct > 0)
+
+    # ── 組合成訊號陣列（shape: n × 37，欄位順序 = _STRAT_KEYS）──
     def _f(cond):
         """NaN-safe bool：NaN → False"""
         return np.where(np.isnan(cond.astype(float)), False, cond).astype(bool) & vol_ok
 
     with np.errstate(invalid="ignore"):
         sig = np.column_stack([
-            _f((ma5_v > ma20_v)   & (vol_ratio >= vol_mult)  & (chg_pct > 0)),   # A
-            _f((ma5_v < ma20_v)   & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # AS
-            _f((gap >= 2.0)        & (vol_ratio >= 1.3)       & (chg_pct > 0)),   # B
-            _f((gap <= -2.0)       & (vol_ratio >= 1.3)       & (chg_pct < 0)),   # BS
-            _f((rsi_prev < 35)     & (rsi_v > rsi_prev)       & (c > ma5_v)),     # C
-            _f((rsi_prev > 65)     & (rsi_v < rsi_prev)       & (c < ma5_v)),     # CS
-            _f((c > hi5_v)         & (vol_ratio >= vol_mult)),                     # D
-            _f((c < lo5_v)         & (vol_ratio >= vol_mult)),                     # DS
+            # ★ 多方（A/B/D/F/G/Q）已移除 vol_ratio 爆量條件（2026-04-25）
+            # 量多反而降低多方 EV；空方保留爆量條件（量大對空方有正向確認）
+            _f((ma5_v > ma20_v)                               & (chg_pct > 0)),   # A  移除 vol_mult
+            _f((ma5_v < ma20_v)   & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # AS 保留
+            _f((gap >= 2.0)                                   & (chg_pct > 0)),   # B  移除 1.3x
+            _f((gap <= -2.0)       & (vol_ratio >= 1.3)       & (chg_pct < 0)),   # BS 保留
+            _f((rsi_prev < 35)     & (rsi_v > rsi_prev)       & (c > ma5_v)),     # C  無量條件
+            _f((rsi_prev > 65)     & (rsi_v < rsi_prev)       & (c < ma5_v)),     # CS 無量條件
+            _f(c > hi5_v),                                                         # D  移除 vol_mult
+            _f((c < lo5_v)         & (vol_ratio >= vol_mult)),                     # DS 保留
             _f(three_up            & (ma5_v > ma10_v) & (ma10_v > ma20_v) & (chg_pct > 0)),  # E
             _f(three_dn            & (ma5_v < ma10_v) & (ma10_v < ma20_v) & (chg_pct < 0)),  # ES
-            _f(vol_expand          & (vol_ratio >= vol_mult)  & (chg_pct > 0)),   # F
-            _f(vol_shrink          & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # FS
-            _f(tide_shrink         & (vol_ratio >= vol_mult)  & (chg_pct > 0)),   # G
-            _f(tide_shrink         & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # GS
+            _f(vol_expand                                     & (chg_pct > 0)),   # F  移除 vol_ratio
+            _f(vol_shrink          & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # FS 保留
+            _f(tide_shrink                                    & (chg_pct > 0)),   # G  移除 vol_mult
+            _f(tide_shrink         & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # GS 保留
             _f(hammer),                                                            # H
             _f(shoot_star),                                                        # HS
             _f(engulf_bull),                                                       # I
@@ -1566,7 +2220,8 @@ def _precompute_signals_vec(sub: pd.DataFrame,
             _f(inside_breakdown_v),                                                # QS
             _f(bias_oversold_v),                                                   # R
             _f(bias_overbought_v),                                                 # RS
-        ])  # shape (n, 36), dtype bool
+            _f(b2_long_v),                                                         # B2
+        ])  # shape (n, 37), dtype bool
 
     return sig
 
@@ -1658,6 +2313,25 @@ def run_scan(data: dict, min_hit: int, vol_mult: float,
             "HS射擊":   "✅" if sigs["HS"] else "❌",
             "I吞多":    "✅" if sigs["I"]  else "❌",
             "IS吞空":   "✅" if sigs["IS"] else "❌",
+            "J MACD多": "✅" if sigs["J"]  else "❌",
+            "JS MACD空":"✅" if sigs["JS"] else "❌",
+            "K布林多":  "✅" if sigs["K"]  else "❌",
+            "KS布林空": "✅" if sigs["KS"] else "❌",
+            "L KD多":   "✅" if sigs["L"]  else "❌",
+            "LS KD空":  "✅" if sigs["LS"] else "❌",
+            "M威廉多":  "✅" if sigs["M"]  else "❌",
+            "MS威廉空": "✅" if sigs["MS"] else "❌",
+            "N均線多":  "✅" if sigs["N"]  else "❌",
+            "NS均線空": "✅" if sigs["NS"] else "❌",
+            "O晨星":    "✅" if sigs["O"]  else "❌",
+            "OS昏星":   "✅" if sigs["OS"] else "❌",
+            "P三兵":    "✅" if sigs["P"]  else "❌",
+            "PS三鴉":   "✅" if sigs["PS"] else "❌",
+            "Q破IB多":  "✅" if sigs["Q"]  else "❌",
+            "QS破IB空": "✅" if sigs["QS"] else "❌",
+            "R偏低多":  "✅" if sigs["R"]  else "❌",
+            "RS偏高空": "✅" if sigs["RS"] else "❌",
+            "B2大跳空": "✅" if sigs["B2"] else "❌",
             "命中數":    hit,
             "方向":      direction,
             "策略清單":  strats,
@@ -1845,17 +2519,21 @@ def run_combo_analysis(data: dict, days: int, min_hit: int,
                        vol_mult: float, min_avg_vol: int,
                        stop_loss: float = 0.0,
                        direction: str = "long",
-                       min_signals: int = 10,
+                       min_signals: int = 100,
                        max_combo: int = 3,
-                       workers: int = 4) -> list:
+                       exit_day: int = 1,
+                       workers: int = 4,
+                       forced_combos: list = None) -> list:
     """
     計算所有 2 到 max_combo 策略組合的勝率與期望值。
     每個組合的每筆交易只計算一次，正確反映「同時符合所有條件才進場」的績效。
     使用向量化訊號預計算 + ThreadPoolExecutor 平行處理以大幅加速。
 
-    direction : "long"（多方組合）或 "short"（空方組合）
-    min_signals: 低於此訊號數的組合標記為 ⚠️ 樣本不足
+    direction     : "long"（多方組合）或 "short"（空方組合）
+    min_signals   : 低於此訊號數的組合標記為 ⚠️ 樣本不足
+    forced_combos : 指定必須強制計算的組合清單（即使觸發次數極少），通常來自 show_combos
     max_combo  : 最大組合策略數（預設 3；太大時組合數爆炸且樣本極少）
+    exit_day   : 1=D1收盤出場（含漲跌停板）2=D2開盤出場（預設）3=D3開盤出場
     """
     from itertools import combinations as _comb
 
@@ -1865,13 +2543,24 @@ def run_combo_analysis(data: dict, days: int, min_hit: int,
     # 候選策略在 _STRAT_KEYS 中的位置索引
     cand_idx     = [_STRAT_KEYS.index(k) for k in candidates]
 
+    # 強制計算組合：解析為 (key, [idx, ...]) 清單
+    _forced: list = []
+    if forced_combos:
+        for fc in forced_combos:
+            parts = fc.strip().split("+")
+            try:
+                idxs = [_STRAT_KEYS.index(p) for p in parts]
+                _forced.append((fc, idxs))
+            except ValueError:
+                pass  # 含有不存在的策略名稱，忽略
+
     def _process_stock(item):
         code, df = item
         buf     = days + 35
         df_sl   = df.iloc[-min(buf, len(df)):]
         n       = len(df_sl)
         start_i = max(20, n - days)
-        if n < 22 or start_i >= n - 1:
+        if n < 22 or start_i >= n - exit_day:
             return {}
 
         sub     = df_sl.reset_index(drop=True)
@@ -1879,7 +2568,7 @@ def run_combo_analysis(data: dict, days: int, min_hit: int,
 
         local_combo: dict = {}  # key → list[float]
 
-        for i in range(start_i, n - 1):
+        for i in range(start_i, n - exit_day):
             row = sig_arr[i]
             hit = [candidates[j] for j, cidx in enumerate(cand_idx) if row[cidx]]
             if len(hit) < 2:
@@ -1898,21 +2587,35 @@ def run_combo_analysis(data: dict, days: int, min_hit: int,
             lim_down = calc_limit_down(d0_close)
 
             # ── 出場計算（只算一次，供所有組合共用）────
+            # 停損：持有期間任一天觸線
+            hold_high = max(float(sub.iloc[i + j]["High"]) for j in range(1, exit_day + 1))
+            hold_low  = min(float(sub.iloc[i + j]["Low"])  for j in range(1, exit_day + 1))
             stopped = False
             if stop_loss > 0:
                 if is_short_dir:
-                    stopped = d1_high >= d1_open * (1 + stop_loss / 100)
+                    stopped = hold_high >= d1_open * (1 + stop_loss / 100)
                 else:
-                    stopped = d1_low  <= d1_open * (1 - stop_loss / 100)
+                    stopped = hold_low  <= d1_open * (1 - stop_loss / 100)
 
             if stopped:
                 ret_net = -(stop_loss + TRADE_COST * 100)
-            elif not is_short_dir:
-                exit_p  = lim_up   if d1_high >= lim_up   else d1_close
-                ret_net = (exit_p - d1_open) / d1_open * 100 - TRADE_COST * 100
+            elif exit_day == 1:
+                # D1 收盤出場，含漲跌停板
+                if not is_short_dir:
+                    exit_p = lim_up   if d1_high >= lim_up   else d1_close
+                    ret_net = (exit_p - d1_open) / d1_open * 100 - TRADE_COST * 100
+                else:
+                    exit_p = lim_down if d1_low  <= lim_down else d1_close
+                    ret_net = (d1_open - exit_p) / d1_open * 100 - TRADE_COST * 100
             else:
-                exit_p  = lim_down if d1_low  <= lim_down else d1_close
-                ret_net = (d1_open - exit_p) / d1_open * 100 - TRADE_COST * 100
+                # D{exit_day} 開盤出場
+                exit_price = float(sub.iloc[i + exit_day]["Open"])
+                if exit_price == 0:
+                    continue
+                if not is_short_dir:
+                    ret_net = (exit_price - d1_open) / d1_open * 100 - TRADE_COST * 100
+                else:
+                    ret_net = (d1_open - exit_price) / d1_open * 100 - TRADE_COST * 100
 
             ret_net = round(ret_net, 3)
 
@@ -1923,6 +2626,18 @@ def run_combo_analysis(data: dict, days: int, min_hit: int,
                     if key not in local_combo:
                         local_combo[key] = []
                     local_combo[key].append(ret_net)
+
+            # ── 強制計算 show_combos 指定的組合 ────────────────────
+            # 若指定組合的所有策略都在本 bar 觸發，但策略數超過 max_combo
+            # 或恰好沒被自然枚舉到（例如只有 B2 一個策略觸發時被跳過），
+            # 仍強制計算，確保 show_combos 指定的組合一定有結果。
+            for fc_key, fc_idxs in _forced:
+                if fc_key in local_combo:
+                    continue  # 已由自然枚舉計算過
+                if all(bool(row[idx]) for idx in fc_idxs):
+                    if fc_key not in local_combo:
+                        local_combo[fc_key] = []
+                    local_combo[fc_key].append(ret_net)
 
         return local_combo
 
@@ -1969,7 +2684,7 @@ def run_combo_analysis(data: dict, days: int, min_hit: int,
 
 
 def print_combo_result(rows: list, days: int, direction: str,
-                       stop_loss: float, min_signals: int = 10,
+                       stop_loss: float, min_signals: int = 100,
                        max_combo: int = 3,
                        show_combos: list = None):
     """
@@ -2002,7 +2717,17 @@ def print_combo_result(rows: list, days: int, direction: str,
             if key in row_map:
                 display_rows.append(row_map[key])
             else:
-                print(f"  ⚠️  找不到組合 '{key}'（回測結果中不存在，可能樣本為 0）")
+                # 組合不存在（樣本為 0）→ 補空行而非僅印警告
+                display_rows.append({
+                    "組合": key,
+                    "訊號次數": 0,
+                    "勝率(%)": 0.0,
+                    "平均獲利(%)": 0.0,
+                    "平均虧損(%)": 0.0,
+                    "期望值(%)": 0.0,
+                    "最大單筆虧損(%)": 0.0,
+                    "樣本": "n=0",
+                })
         if not display_rows:
             print("  （指定組合均無資料）")
             print("═"*85 + "\n")
@@ -2359,6 +3084,7 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
             "P":"P三兵",   "PS":"PS三鴉",
             "Q":"Q破IB多", "QS":"QS破IB空",
             "R":"R偏低多", "RS":"RS偏高空",
+            "B2":"B2大跳空",
         }
         involved = set()
         for c in show_combos:
@@ -2376,19 +3102,21 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
                 "L KD多","LS KD空","M威廉多","MS威廉空",
                 "N均線多","NS均線空","O晨星","OS昏星",
                 "P三兵","PS三鴉","Q破IB多","QS破IB空","R偏低多","RS偏高空",
+                "B2大跳空",
                 "命中數","方向"]
 
     print_table(df, cols)
     print("═"*100)
-    print("  A多=均線突破+爆量  AS空=均線死亡  B多=跳空↑  BS空=跳空↓")
+    print("  A多=均線突破(無爆量)  AS空=均線死亡+爆量  B多=跳空↑(無爆量)  BS空=跳空↓+爆量")
     print("  C多=RSI超賣  CS空=RSI超買  D多=突破前高  DS空=跌破前低")
     print("  E多=強勢連漲  ES空=弱勢連跌  F多=均量擴張  FS空=均量萎縮")
-    print("  G多=縮後爆量↑  GS空=縮後爆量↓  H多=鎚子K  HS空=射擊之星")
+    print("  G多=縮量後↑(無爆量)  GS空=縮量後爆量↓  H多=鎚子K  HS空=射擊之星")
     print("  I多=吞噬陽  IS空=吞噬陰  J多=MACD金叉  JS空=MACD死叉")
     print("  K多=布林下軌反彈  KS空=布林上軌反壓  L多=KD超賣金叉  LS空=KD超買死叉")
     print("  M多=威廉%R超賣  MS空=威廉%R超買  N多=多頭排列回測  NS空=空頭排列跌破")
     print("  O多=晨星  OS空=黃昏星  P多=紅三兵  PS空=黑三兵")
     print("  Q多=InsideBar突破  QS空=InsideBar跌破  R多=BIAS超跌  RS空=BIAS超漲")
+    print("  B2多=大跳空(≥5%)+低量(≥0.8x)  ← 補抓後節假日消息面跳空")
     print("═"*100 + "\n")
 
 
@@ -2665,15 +3393,21 @@ def main():
                             help="策略命中門檻，預設 1，建議設 2")
     scan_group.add_argument("--save",    action="store_true",
                             help="儲存選股結果到 SQLite 和 CSV")
+    scan_group.add_argument("--date",    type=str, default=None, metavar="YYYY-MM-DD",
+                            help="指定掃描基準日（預設：今日），格式 YYYY-MM-DD，"
+                                 "例：--date 2026-04-22 可回顧該日訊號")
 
     # ── 進出場設定 ────────────────────────────────
     trade_group = parser.add_argument_group("進出場設定（選股 / 回測共用）")
-    trade_group.add_argument("--stop-loss",   type=float, default=2.0,
-                             help="停損門檻（%%），0=不設停損，預設 2.0（估算值）")
+    trade_group.add_argument("--stop-loss",   type=float, default=7.0,
+                             help="停損門檻（%%），0=不設停損，預設 7.0"
+                                  "（2026-04 停損敏感度測試建議值：-2%% 太緊會毀掉 EV；"
+                                  "-7%% 幾乎等同無停損，但能擋掉尾端風險）")
     trade_group.add_argument("--take-profit", type=float, default=0.0,
                              help="止盈門檻（%%），0=不設止盈，如 2.0=漲 2%% 出場（估算值）")
-    trade_group.add_argument("--exit-day",    type=int,   default=2,
-                             help="出場日：1=隔日當沖(D1收盤)  2=持一日(D2開盤，預設)  3=持兩日(D3開盤)")
+    trade_group.add_argument("--exit-day",    type=int,   default=None,
+                             help="出場日：1=隔日當沖(D1收盤)  2=持一日(D2開盤)  3=持兩日(D3開盤)  "
+                                  "未指定時：--combo 模式從 PRESET_EXIT_DAY 查表，其他模式預設 2")
 
     # ── 策略篩選 ──────────────────────────────────
     strat_group = parser.add_argument_group("策略篩選")
@@ -2692,8 +3426,8 @@ def main():
     bt_group.add_argument("--show-trades", type=int, default=0, metavar="N",
                           help="顯示前 N 筆個別交易明細（搭配 --backtest-limit 使用，"
                                "用於人工驗證回測邏輯，如 --show-trades 20）")
-    bt_group.add_argument("--min-signals", type=int, default=10, metavar="N",
-                          help="組合分析：低於 N 筆的組合標記為樣本不足（預設 10）")
+    bt_group.add_argument("--min-signals", type=int, default=100, metavar="N",
+                          help="組合分析：低於 N 筆的組合標記為樣本不足（預設 100，統計顯著門檻）")
     bt_group.add_argument("--max-combo",  type=int, default=3, metavar="N",
                           help="組合分析：最大組合策略數（預設 3；設 2 只看兩兩配對）")
     bt_group.add_argument("--workers",     type=int, default=4, metavar="N",
@@ -2701,22 +3435,33 @@ def main():
     bt_group.add_argument("--show-combos", type=str, default=None, metavar="COMBOS",
                           help="只顯示指定組合（逗號分隔），"
                                "如 --show-combos \"BS+GS,AS+BS+GS\"")
-    bt_group.add_argument("--preset",      type=str, default=None, metavar="NAME",
+    bt_group.add_argument("--preset",      type=str, default=None, metavar="NAME[,NAME2...]",
                           help=f"使用預設組合清單（等同 --show-combos 展開版），"
+                               f"支援逗號分隔多個 preset，例如：long3_lean,long_trend。"
                                f"可用：{', '.join(COMBO_PRESETS.keys())}")
 
     # ── 資料來源 ──────────────────────────────────
     src_group = parser.add_argument_group("資料來源")
     src_group.add_argument("--datasource", type=str, default="sinopac",
-                           choices=["yfinance", "sinopac"],
-                           help="行情資料來源：sinopac（預設，永豐金，盤後 5 分鐘即更新，需帳號）"
-                                " 或 yfinance（免帳號）")
+                           choices=["yfinance", "sinopac", "twse"],
+                           help="行情資料來源："
+                                "sinopac（預設，永豐金，盤後 5 分鐘即更新，需帳號）／"
+                                "twse（台灣證交所官方公開 API，免帳號、含上櫃 TPEX）／"
+                                "yfinance（免帳號，目前不穩定）")
     src_group.add_argument("--sj-api-key",    type=str, default=None,
                            metavar="KEY",
                            help="永豐金 API Key（亦可設環境變數 SJ_API_KEY）")
     src_group.add_argument("--sj-secret-key", type=str, default=None,
                            metavar="SECRET",
                            help="永豐金 Secret Key（亦可設環境變數 SJ_SECRET_KEY）")
+    # ── SQLite 快取控制 ──────────────────────────
+    src_group.add_argument("--no-cache",      action="store_true",
+                           help="不讀寫 SQLite 快取（每次都打遠端，較慢）")
+    src_group.add_argument("--cache-only",    action="store_true",
+                           help="只讀 SQLite 快取，不打遠端（快取缺資料的 code 會被略過）")
+    src_group.add_argument("--refresh-cache", action="store_true",
+                           help="忽略既有快取，全部重抓並覆蓋"
+                                "（首次用 sinopac 抓滿時建議搭配此旗標）")
     src_ex = src_group.add_mutually_exclusive_group()
     src_ex.add_argument("--codes", type=str, default=None,
                         help="指定股票代號，逗號分隔，如 2330,2317,2454")
@@ -2745,6 +3490,29 @@ def main():
         if args.show_combos:
             print(f"  ℹ️  --preset 與 --show-combos 同時指定，以 --preset {args.preset} 為準")
         args.show_combos = ",".join(expanded)
+
+    # ── exit-day 解析：未指定時從 PRESET_EXIT_DAY 查表，否則 fallback 2 ──
+    _exit_day_explicit = (args.exit_day is not None)
+    if not _exit_day_explicit:
+        if args.combo and args.preset:
+            # 多 preset 時收集各自建議值（忽略 None 的 all3_lean 等）
+            _preset_names  = [p.strip().lower() for p in args.preset.split(",") if p.strip()]
+            _preset_exits  = [PRESET_EXIT_DAY[n] for n in _preset_names
+                              if n in PRESET_EXIT_DAY and PRESET_EXIT_DAY[n] is not None]
+            _unique_exits  = list(dict.fromkeys(_preset_exits))   # 去重保序
+            if len(_unique_exits) == 1:
+                # 所有 preset 建議值一致
+                args.exit_day = _unique_exits[0]
+                print(f"  ℹ️  --exit-day 未指定，依 preset '{args.preset}' 建議值自動設為 {args.exit_day}")
+            elif len(_unique_exits) > 1:
+                # 建議值衝突：取最大值並提示
+                args.exit_day = max(_unique_exits)
+                print(f"  ⚠️  多 preset 的建議 exit-day 不同 {dict(zip(_preset_names, _preset_exits))}，"
+                      f"自動取最大值 {args.exit_day}；可用 --exit-day 手動指定")
+            else:
+                args.exit_day = 2
+        else:
+            args.exit_day = 2
 
     # 啟動提示
     date_str = datetime.date.today().strftime("%Y/%m/%d")
@@ -2777,9 +3545,14 @@ def main():
         src_str = f"自訂清單（--codes/--csv）"
     else:
         src_str = f"成交量前 {args.top_n} 名"
-    ds_str = "永豐金 Shioaji" if args.datasource == "sinopac" else "yfinance"
+    _ds_label = {
+        "sinopac":  "永豐金 Shioaji",
+        "twse":     "TWSE/TPEX 官方 API",
+        "yfinance": "yfinance",
+    }
+    ds_str = _ds_label.get(args.datasource, args.datasource)
     print(f"  掃描範圍：{src_str}  │  最低均量：{args.min_vol} 張  │  資料源：{ds_str}")
-    print(f"  命中門檻：≥{args.min_hit}  │  爆量倍數：{args.vol_mult}x")
+    print(f"  命中門檻:≥{args.min_hit}  │  爆量倍數：{args.vol_mult}x（空方用；多方策略已移除爆量條件）")
     if args.backtest:
         sl_str  = f"-{args.stop_loss}%（估算）" if args.stop_loss > 0 else "未設定"
         tp_str  = f"  止盈：+{args.take_profit}%" if args.take_profit > 0 else ""
@@ -2822,24 +3595,63 @@ def main():
         sys.exit(1)
 
     # ── 選擇資料來源 ──────────────────────────────
-    if args.datasource == "sinopac":
-        sj_key    = args.sj_api_key    or os.environ.get("SJ_API_KEY",    "")
-        sj_secret = args.sj_secret_key or os.environ.get("SJ_SECRET_KEY", "")
-        if not sj_key or not sj_secret:
-            print("  ❌ 使用永豐金資料源需提供 API 金鑰，有兩種方式：")
+    sj_key    = args.sj_api_key    or os.environ.get("SJ_API_KEY",    "")
+    sj_secret = args.sj_secret_key or os.environ.get("SJ_SECRET_KEY", "")
+
+    # sinopac 必須有金鑰；twse / yfinance 不需要
+    if args.datasource == "sinopac" and not (sj_key and sj_secret):
+        if not args.cache_only:
+            print("  ❌ 使用永豐金資料源需提供 API 金鑰，有三種方式：")
             print("     方式一（命令列）：--sj-api-key YOUR_KEY --sj-secret-key YOUR_SECRET")
             print("     方式二（環境變數）：set SJ_API_KEY=... && set SJ_SECRET_KEY=...")
+            print("     方式三（不需金鑰）：--datasource twse")
             print("     ＊ API 金鑰請至永豐金證券後台申請")
             conn.close()
             sys.exit(1)
-        data = fetch_data_sinopac(codes, args.days + 30, sj_key, sj_secret)
+
+    if args.no_cache:
+        # 不走快取，每次直接打遠端（舊行為）
+        if args.datasource == "sinopac":
+            data = fetch_data_sinopac(codes, args.days + 30, sj_key, sj_secret)
+        elif args.datasource == "twse":
+            data = fetch_data_twse(codes, args.days + 30)
+        else:
+            data = fetch_data(codes, args.days + 30)
     else:
-        data = fetch_data(codes, args.days + 30)
+        # 走 SQLite 快取 + 增量補（推薦流程）
+        data = fetch_data_cached(
+            codes, args.days + 30,
+            datasource=args.datasource,
+            sj_key=sj_key, sj_secret=sj_secret,
+            cache_only=args.cache_only,
+            refresh=args.refresh_cache,
+        )
 
     if not data:
         print("  ❌ 無法取得歷史資料")
         conn.close()
         sys.exit(1)
+
+    # ── --date：把所有 DataFrame 截到指定日期 ────────
+    if args.date:
+        try:
+            _target_date = datetime.date.fromisoformat(args.date)
+        except ValueError:
+            print(f"  ❌ --date 格式錯誤（須為 YYYY-MM-DD）：{args.date}")
+            conn.close()
+            sys.exit(1)
+        _sliced: dict = {}
+        for _code, _df in data.items():
+            _df2 = _df[_df.index.date <= _target_date]
+            if len(_df2) >= 22:
+                _sliced[_code] = _df2
+        if not _sliced:
+            print(f"  ❌ 指定日期 {args.date} 找不到任何股票的 K 棒資料（快取不足？）")
+            conn.close()
+            sys.exit(1)
+        data     = _sliced
+        date_str = _target_date.strftime("%Y/%m/%d")
+        print(f"  📅 回顧模式：以 {args.date} 為基準日，命中股票以當日收盤訊號計算")
 
     # ── 選股 ─────────────────────────────────────
     if args.scan:
@@ -2853,11 +3665,12 @@ def main():
         print_scan_result(rows, date_str, args.min_hit, show_combos=show_combos)
 
         if args.save and rows:
-            scan_date = datetime.date.today().isoformat()
+            scan_date = args.date if args.date else datetime.date.today().isoformat()
             save_scan(conn, scan_date, rows, args.min_hit)
             print(f"  💾 選股結果已存入 SQLite：{DB_PATH}")
 
-            fname = f"隔日沖選股_{datetime.date.today().strftime('%Y%m%d')}.csv"
+            date_tag = args.date.replace("-", "") if args.date else datetime.date.today().strftime("%Y%m%d")
+            fname = f"隔日沖選股_{date_tag}.csv"
             pd.DataFrame(rows).to_csv(fname, index=False, encoding="utf-8-sig")
             print(f"  💾 CSV：{fname}")
 
@@ -2933,29 +3746,77 @@ def main():
 
     # ── 策略組合分析 ─────────────────────────────
     if args.combo:
-        direction = "short" if args.short_only else "long"
-        rows = run_combo_analysis(
-            data, args.days, args.min_hit,
-            args.vol_mult, args.min_vol,
+        # 解析 show_combos 並自動偵測長空混合
+        _raw_show = ([c.strip() for c in args.show_combos.split(",") if c.strip()]
+                     if args.show_combos else None)
+
+        def _is_short_combo(c: str) -> bool:
+            return any(s.endswith("S") for s in c.split("+"))
+
+        if _raw_show:
+            _long_show  = [c for c in _raw_show if not _is_short_combo(c)] or None
+            _short_show = [c for c in _raw_show if     _is_short_combo(c)] or None
+        else:
+            _long_show  = None
+            _short_show = None
+
+        # 決定要跑哪些方向
+        # --short_only：只跑空方；有混合 preset：長空都跑；否則跟原本邏輯
+        _run_long  = (not args.short_only) and (_raw_show is None or _long_show  is not None)
+        _run_short = args.short_only       or  (_raw_show is not None and _short_show is not None)
+
+        # ── exit_day：all3_lean 時長空各自查 PRESET_EXIT_DAY ────────
+        def _resolve_exit_day(direction: str) -> int:
+            """手動指定優先；all3_lean 混合時長空各查子 preset；否則用 args.exit_day"""
+            if _exit_day_explicit:
+                return args.exit_day
+            if args.preset and args.preset.strip().lower() == "all3_lean":
+                sub = "long3_lean" if direction == "long" else "short3_lean"
+                return PRESET_EXIT_DAY.get(sub, 2)
+            return args.exit_day  # 已在前面由 PRESET_EXIT_DAY 或 fallback 2 設好
+
+        _combo_base = dict(
+            days=args.days, min_hit=args.min_hit,
+            vol_mult=args.vol_mult, min_avg_vol=args.min_vol,
             stop_loss=args.stop_loss,
-            direction=direction,
             min_signals=args.min_signals,
             max_combo=args.max_combo,
             workers=args.workers,
         )
-        show_combos = ([c.strip() for c in args.show_combos.split(",") if c.strip()]
-                       if args.show_combos else None)
-        print_combo_result(rows, args.days, direction,
-                           args.stop_loss, args.min_signals,
-                           max_combo=args.max_combo,
-                           show_combos=show_combos)
-        if args.save and rows:
-            dir_tag = "short" if args.short_only else "long"
-            sl_tag  = f"_sl{args.stop_loss}" if args.stop_loss > 0 else "_nosl"
-            date_s  = datetime.date.today().strftime("%Y%m%d")
-            fname   = f"組合分析_{dir_tag}_{date_s}_d{args.days}{sl_tag}.csv"
-            pd.DataFrame(rows).to_csv(fname, index=False, encoding="utf-8-sig")
-            print(f"  💾 組合分析已儲存：{fname}")
+
+        if _run_long:
+            _long_exit = _resolve_exit_day("long")
+            rows_long = run_combo_analysis(data, direction="long",
+                                           exit_day=_long_exit,
+                                           forced_combos=_long_show,
+                                           **_combo_base)
+            print_combo_result(rows_long, args.days, "long",
+                               args.stop_loss, args.min_signals,
+                               max_combo=args.max_combo,
+                               show_combos=_long_show)
+            if args.save and rows_long:
+                sl_tag = f"_sl{args.stop_loss}" if args.stop_loss > 0 else "_nosl"
+                date_s = datetime.date.today().strftime("%Y%m%d")
+                fname  = f"組合分析_long_{date_s}_d{args.days}{sl_tag}_ed{_long_exit}.csv"
+                pd.DataFrame(rows_long).to_csv(fname, index=False, encoding="utf-8-sig")
+                print(f"  💾 組合分析已儲存：{fname}")
+
+        if _run_short:
+            _short_exit = _resolve_exit_day("short")
+            rows_short = run_combo_analysis(data, direction="short",
+                                            exit_day=_short_exit,
+                                            forced_combos=_short_show,
+                                            **_combo_base)
+            print_combo_result(rows_short, args.days, "short",
+                               args.stop_loss, args.min_signals,
+                               max_combo=args.max_combo,
+                               show_combos=_short_show)
+            if args.save and rows_short:
+                sl_tag = f"_sl{args.stop_loss}" if args.stop_loss > 0 else "_nosl"
+                date_s = datetime.date.today().strftime("%Y%m%d")
+                fname  = f"組合分析_short_{date_s}_d{args.days}{sl_tag}_ed{_short_exit}.csv"
+                pd.DataFrame(rows_short).to_csv(fname, index=False, encoding="utf-8-sig")
+                print(f"  💾 組合分析已儲存：{fname}")
 
     conn.close()
 

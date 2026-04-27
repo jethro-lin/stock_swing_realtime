@@ -164,6 +164,33 @@ COMBO_PRESETS: dict[str, list[str]] = {
 # 組合 preset（動態展開，確保 long1/short1 修改後 all1 自動同步）
 COMBO_PRESETS["all1"] = COMBO_PRESETS["long1"] + COMBO_PRESETS["short1"]
 
+# ── short3_lean：空方精簡版（從 2400日回測去除多餘組合後保留 14 個）──
+# 移除原則：
+#   ① 三策略 EV < 子兩策略 EV（加了策略反而變差）
+#      → FS+MS+RS、BS+KS+MS、BS+CS+KS、BS+DS+FS、BS+CS+DS、AS+FS+GS、KS+MS+RS、KS+LS+RS 全移除
+#   ② 兩策略已被 EV 更高的三策略版本涵蓋
+#      → BS+FS/BS+NS/BS+DS/AS+GS/DS+GS 移除（被 BS+FS+NS、BS+DS+NS、AS+DS+GS 取代）
+# 停損建議：BS 家族 -7%；FS 家族建議 -10% 或不設停損（尾端可達 -12%）
+COMBO_PRESETS["short3_lean"] = [
+    # ▸ TIER 1 高 EV 明星組合（EV ≥ 1%，勝率 60%+）
+    "BS+GS",       # 63.0%  EV+1.878%  n=108  ⭐EV 之王
+    "BS+MS+RS",    # 65.3%  EV+1.676%  n=170  ⭐勝率之王
+    "BS+RS",       # 64.3%  EV+1.556%  n=185  BS+MS+RS 較寬版（無 MS 條件）
+    "BS+FS+NS",    # 60.5%  EV+0.999%  n=172  ⭐風控最佳（max -5.66%）
+    # ▸ TIER 2 良好組合（EV 0.5–1.0%）
+    "BS+FS+JS",    # 55.2%  EV+0.839%  n=105  BS+FS 強化版（+JS 過濾）
+    "AS+DS+GS",    # 55.3%  EV+0.780%  n=228  取代 AS+GS / DS+GS
+    "FS+RS",       # 61.1%  EV+0.767%  n=144  ⚠ 建議 -10% 停損（尾端 -12%）
+    "BS+KS",       # 56.3%  EV+0.561%  n=279  +MS/+CS 版均劣於此
+    "BS+OS",       # 55.2%  EV+0.531%  n=116
+    # ▸ TIER 3 選擇性保留（EV 0.3–0.5%，有特定優勢）
+    "BS+DS+NS",    # 56.6%  EV+0.460%  n=389  取代 BS+DS / BS+NS
+    "CS+FS+JS",    # 47.1%  EV+0.415%  n=136
+    "AS+BS+DS",    # 51.6%  EV+0.407%  n=1256 最大樣本，統計穩健
+    "BS+CS+JS",    # 53.1%  EV+0.371%  n=147
+    "BS+MS",       # 49.9%  EV+0.333%  n=678  大樣本基線
+]
+
 
 def resolve_preset(preset: str) -> list[str]:
     """
@@ -550,94 +577,84 @@ def fetch_data(codes: list, days: int = DEFAULT_DAYS) -> dict:
 # ══════════════════════════════════════════════
 # TWSE / TPEX 官方日K 備援下載
 # ══════════════════════════════════════════════
-def _fetch_official_daily(code: str,
-                           start_date: datetime.date,
-                           end_date: datetime.date):
-    """
-    從 TWSE（上市）或 TPEX（上櫃）抓官方日K作為備援。
-    回傳 DatetimeIndex DataFrame（Open/High/Low/Close/Volume/Vol_K）
-    或 None（找不到資料）。
-    """
-    import warnings as _w
-    _w.filterwarnings("ignore", message="Unverified HTTPS")
+import warnings as _ssl_warn
+_ssl_warn.filterwarnings("ignore", message="Unverified HTTPS")
 
-    months: list = []
-    cur = start_date.replace(day=1)
-    while cur <= end_date:
-        months.append(cur.strftime("%Y%m"))
-        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
-
-    def _twse(yyyymm: str) -> list:
-        url = (f"https://www.twse.com.tw/exchangeReport/STOCK_DAY"
-               f"?response=json&date={yyyymm}01&stockNo={code}")
-        try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"},
-                             timeout=12, verify=False)
-            data = r.json()
-            if data.get("stat") != "OK":
-                return []
-            rows = []
-            for row in data.get("data", []):
-                try:
-                    p = row[0].replace("/", "-").split("-")
-                    dt = f"{int(p[0])+1911}-{p[1]}-{p[2]}"
-                    rows.append({
-                        "date":  dt,
-                        "Open":  float(row[3].replace(",", "")),
-                        "High":  float(row[4].replace(",", "")),
-                        "Low":   float(row[5].replace(",", "")),
-                        "Close": float(row[6].replace(",", "")),
-                        "Vol_K": int(row[1].replace(",", "")) // 1000,
-                    })
-                except Exception:
-                    continue
-            return rows
-        except Exception:
+def _fetch_twse_month(code: str, yyyymm: str,
+                      session: "requests.Session | None" = None) -> list:
+    """抓 TWSE 上市股票單月日K，回傳 list of row-dict"""
+    url = (f"https://www.twse.com.tw/exchangeReport/STOCK_DAY"
+           f"?response=json&date={yyyymm}01&stockNo={code}")
+    getter = session.get if session else requests.get
+    try:
+        r = getter(url, timeout=12, verify=False)
+        data = r.json()
+        if data.get("stat") != "OK":
             return []
+        rows = []
+        for row in data.get("data", []):
+            try:
+                p = row[0].replace("/", "-").split("-")
+                rows.append({
+                    "date":  f"{int(p[0])+1911}-{p[1]}-{p[2]}",
+                    "Open":  float(row[3].replace(",", "")),
+                    "High":  float(row[4].replace(",", "")),
+                    "Low":   float(row[5].replace(",", "")),
+                    "Close": float(row[6].replace(",", "")),
+                    "Vol_K": int(row[1].replace(",", "")) // 1000,
+                })
+            except Exception:
+                continue
+        return rows
+    except Exception:
+        return []
 
-    def _tpex(yyyymm: str) -> list:
-        roc_y = int(yyyymm[:4]) - 1911
-        mon   = yyyymm[4:]
-        url = (f"https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/"
-               f"st43_result.php?l=zh-tw&d={mon}/{roc_y}&s={code}&o=json")
-        try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"},
-                             timeout=12, verify=False)
-            data = r.json()
-            if not data.get("iTotalRecords", 0):
-                return []
-            rows = []
-            for row in data.get("aaData", []):
-                try:
-                    p = row[0].replace("/", "-").split("-")
-                    dt = f"{int(p[0])+1911}-{p[1]}-{p[2]}"
-                    rows.append({
-                        "date":  dt,
-                        "Open":  float(row[2].replace(",", "")),
-                        "High":  float(row[3].replace(",", "")),
-                        "Low":   float(row[4].replace(",", "")),
-                        "Close": float(row[5].replace(",", "")),
-                        "Vol_K": int(row[1].replace(",", "")) // 1000,
-                    })
-                except Exception:
-                    continue
-            return rows
-        except Exception:
+
+def _fetch_tpex_month(code: str, yyyymm: str,
+                      session: "requests.Session | None" = None) -> list:
+    """抓 TPEX 上櫃股票單月日K，回傳 list of row-dict"""
+    roc_y = int(yyyymm[:4]) - 1911
+    mon   = yyyymm[4:]
+    url = (f"https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/"
+           f"st43_result.php?l=zh-tw&d={mon}/{roc_y}&s={code}&o=json")
+    getter = session.get if session else requests.get
+    try:
+        r = getter(url, timeout=12, verify=False)
+        data = r.json()
+        if not data.get("iTotalRecords", 0):
             return []
+        rows = []
+        for row in data.get("aaData", []):
+            try:
+                p = row[0].replace("/", "-").split("-")
+                rows.append({
+                    "date":  f"{int(p[0])+1911}-{p[1]}-{p[2]}",
+                    "Open":  float(row[2].replace(",", "")),
+                    "High":  float(row[3].replace(",", "")),
+                    "Low":   float(row[4].replace(",", "")),
+                    "Close": float(row[5].replace(",", "")),
+                    "Vol_K": int(row[1].replace(",", "")) // 1000,
+                })
+            except Exception:
+                continue
+        return rows
+    except Exception:
+        return []
 
-    all_rows: list = []
-    for ym in months:
-        rows = _twse(ym)
-        if rows:
-            all_rows.extend(rows)
-        else:
-            all_rows.extend(_tpex(ym))
-        time.sleep(0.25)
 
-    if not all_rows:
+def _fetch_official_month(code: str, yyyymm: str,
+                          session: "requests.Session | None" = None) -> list:
+    """TWSE 優先，失敗改 TPEX（單月）"""
+    rows = _fetch_twse_month(code, yyyymm, session=session)
+    return rows if rows else _fetch_tpex_month(code, yyyymm, session=session)
+
+
+def _rows_to_df(rows: list, start_date: datetime.date,
+                end_date: datetime.date):
+    """把 row-dict list 整理成 DatetimeIndex DataFrame，失敗回傳 None"""
+    if not rows:
         return None
-
-    df = pd.DataFrame(all_rows)
+    df = pd.DataFrame(rows)
     df = df[(df["date"] >= str(start_date)) & (df["date"] <= str(end_date))]
     if df.empty:
         return None
@@ -647,6 +664,26 @@ def _fetch_official_daily(code: str,
     df = df.drop(columns=["date"])
     df["Volume"] = df["Vol_K"] * 1000
     return df
+
+
+def _fetch_official_daily(code: str,
+                           start_date: datetime.date,
+                           end_date: datetime.date):
+    """
+    單一股票循序抓所有月份後整理成 DataFrame。
+    （fetch_data_sinopac 的 Step 3 改用扁平並行；此函式保留給單股情境）
+    """
+    months: list = []
+    cur = start_date.replace(day=1)
+    while cur <= end_date:
+        months.append(cur.strftime("%Y%m"))
+        cur = (cur + datetime.timedelta(days=32)).replace(day=1)
+
+    all_rows: list = []
+    for ym in months:
+        all_rows.extend(_fetch_official_month(code, ym))
+
+    return _rows_to_df(all_rows, start_date, end_date)
 
 
 # ══════════════════════════════════════════════
@@ -691,13 +728,16 @@ def fetch_data_sinopac(codes: list, days: int,
         print(f"  ❌ 永豐金登入失敗：{e}")
         return {}
 
-    for _wi in range(31):
+    print(f"  ⏳ 等待合約載入完成...")
+    for _wi in range(60):
         try:
             if api.Contracts.Stocks["2330"] is not None:
                 break
         except Exception:
             pass
         time.sleep(1)
+    time.sleep(5)
+    print(f"  ✅ 合約載入完成（已等待穩定）")
 
     def _get_contract(code: str):
         for mkt in ("TSE", "OTC"):
@@ -712,7 +752,7 @@ def fetch_data_sinopac(codes: list, days: int,
         except Exception:
             return None
 
-    # ── Step 2：kbars 下載歷史日K（並行） ────────────────────────
+    # ── Step 2：kbars smoke test → 確認此帳號可用 kbars ─────────────
     print(f"  📥 [1/2] 永豐金 kbars 下載歷史日K（{start_str} ~ {end_str}）...")
     if _market_open:
         print(f"  ⏰ 現在 {_now_tw.strftime('%H:%M')} 台灣時間，尚未收盤"
@@ -720,40 +760,77 @@ def fetch_data_sinopac(codes: list, days: int,
 
     results: dict = {}
     fallback_codes: list = []
-    _lock = threading.Lock()
+    _kbars_err_sample: list = []
 
-    def _fetch_kbars_one(code: str) -> None:
+    # 盤中：kbars Request-Reply 頻道不可用，直接略過 smoke test 走備援
+    if _market_open:
+        print(f"  ⏩ 盤中（{_now_tw.strftime('%H:%M')}）略過 kbars，直接走 TWSE/TPEX 備援")
+        fallback_codes = list(codes)
+    else:
+        _smoke_ok = False
+        _smoke_contract = _get_contract("2330")
+        if _smoke_contract:
+            try:
+                _smoke_kb = api.kbars(
+                    contract=_smoke_contract,
+                    start=str(hist_end - datetime.timedelta(days=5)),
+                    end=str(hist_end),
+                )
+                if _smoke_kb and len(pd.DataFrame({**_smoke_kb})) > 0:
+                    _smoke_ok = True
+                    print(f"  ✅ kbars smoke test 通過，開始下載 {len(codes)} 檔...")
+            except Exception as e:
+                print(f"  ⚠️  kbars smoke test 失敗（{type(e).__name__}: {e}）"
+                      f"，全部切換 TWSE 備援")
+
+        if not _smoke_ok:
+            fallback_codes = list(codes)
+
+    # shioaji api.kbars() 非 thread-safe，必須循序呼叫
+    total = len(codes)
+    for idx, code in enumerate(codes, 1):
+        if code in fallback_codes:
+            continue
         contract = _get_contract(code)
         if contract is None:
-            with _lock:
-                fallback_codes.append(code)
-            return
+            fallback_codes.append(code)
+            continue
 
         kb = None
-        for freq_kwarg in [{"frequency": "D"}, {}]:
-            try:
-                kb = api.kbars(contract=contract,
-                               start=start_str, end=end_str,
-                               **freq_kwarg)
+        last_err = None
+        for _attempt in range(3):
+            for freq_kwarg in [{"frequency": "D"}, {}]:
+                try:
+                    kb = api.kbars(contract=contract,
+                                   start=start_str, end=end_str,
+                                   **freq_kwarg)
+                    break
+                except TypeError as te:
+                    if "frequency" in str(te):
+                        continue
+                    last_err = te
+                    break
+                except Exception as e:
+                    last_err = e
+                    break
+            if kb is not None:
                 break
-            except TypeError as te:
-                if "frequency" in str(te):
-                    continue
-                break
-            except Exception:
+            if last_err and "Not ready" in str(last_err):
+                time.sleep(1)
+            else:
                 break
 
         if kb is None:
-            with _lock:
-                fallback_codes.append(code)
-            return
+            fallback_codes.append(code)
+            if last_err and len(_kbars_err_sample) < 3:
+                _kbars_err_sample.append(f"{code}: {type(last_err).__name__}: {last_err}")
+            continue
 
         try:
             df_min = pd.DataFrame({**kb})
             if len(df_min) == 0:
-                with _lock:
-                    fallback_codes.append(code)
-                return
+                fallback_codes.append(code)
+                continue
 
             df_min["ts"]   = pd.to_datetime(df_min["ts"])
             df_min["date"] = df_min["ts"].dt.date
@@ -775,40 +852,85 @@ def fetch_data_sinopac(codes: list, days: int,
                             (df_day.index.date <= hist_end)]
 
             if len(df_day) < 5:
-                with _lock:
-                    fallback_codes.append(code)
-                return
-
-            with _lock:
-                results[code] = df_day
-
-        except Exception:
-            with _lock:
                 fallback_codes.append(code)
+                continue
 
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        futures = {executor.submit(_fetch_kbars_one, c): c for c in codes}
-        done = 0
-        total = len(codes)
-        for fut in futures:
-            fut.result()
-            done += 1
-            if done % 50 == 0 or done == total:
-                print(f"  ── kbars 進度：{done}/{total} 檔"
-                      f"（成功 {len(results)} / 備援 {len(fallback_codes)}）")
+            results[code] = df_day
+
+        except Exception as e:
+            fallback_codes.append(code)
+            if len(_kbars_err_sample) < 3:
+                _kbars_err_sample.append(f"{code}(parse): {type(e).__name__}: {e}")
+
+        if idx % 50 == 0 or idx == total:
+            print(f"  ── kbars 進度：{idx}/{total} 檔"
+                  f"（成功 {len(results)} / 備援 {len(fallback_codes)}）")
+
+    if _kbars_err_sample:
+        print(f"  ⚠️  kbars 錯誤樣本（前 {len(_kbars_err_sample)} 筆）：")
+        for s in _kbars_err_sample:
+            print(f"     {s}")
 
     print(f"  ✅ kbars 完成：{len(results)} 檔成功  |  {len(fallback_codes)} 檔切換備援")
 
-    # ── Step 3：TWSE / TPEX 備援 ────────────────────────────────
+    # ── Step 3：TWSE / TPEX 備援（(stock×month) 扁平並行） ──────────
     if fallback_codes:
-        print(f"  🔄 TWSE/TPEX 官方備援下載 {len(fallback_codes)} 檔...")
+        _fb_months: list = []
+        _cur = hist_start.replace(day=1)
+        while _cur <= hist_end:
+            _fb_months.append(_cur.strftime("%Y%m"))
+            _cur = (_cur + datetime.timedelta(days=32)).replace(day=1)
+
+        n_fb     = len(fallback_codes)
+        n_months = len(_fb_months)
+        n_tasks  = n_fb * n_months
+        _tw      = min(20, n_tasks)
+        est_sec  = n_tasks * 0.4 / max(_tw, 1)
+        print(f"  🔄 TWSE/TPEX 備援：{n_fb} 檔 × {n_months} 個月 = {n_tasks} 筆請求"
+              f"（{_tw} workers，估計 {est_sec:.0f} 秒）...")
+
+        from collections import defaultdict
+        _code_rows: dict = defaultdict(list)
+        _t_done = 0
+        _t_lock = threading.Lock()
+        _report_every = max(1, n_tasks // 20)
+
+        _tls = threading.local()
+
+        def _get_session() -> requests.Session:
+            if not hasattr(_tls, "session"):
+                _tls.session = requests.Session()
+                _tls.session.headers.update({"User-Agent": "Mozilla/5.0"})
+                _tls.session.verify = False
+            return _tls.session
+
+        def _fetch_task(task: tuple) -> None:
+            code, ym = task
+            sess = _get_session()
+            rows = _fetch_official_month(code, ym, session=sess)
+            with _t_lock:
+                nonlocal _t_done
+                _t_done += 1
+                done_now = _t_done
+            if rows:
+                _code_rows[code].extend(rows)
+            if done_now % _report_every == 0 or done_now == n_tasks:
+                pct = done_now * 100 // n_tasks
+                print(f"  ── 備援進度：{done_now}/{n_tasks} 筆（{pct}%）")
+
+        # 月份優先：(月1,股1),(月1,股2),... 讓同時間的請求分散到不同股票
+        tasks = [(c, ym) for ym in _fb_months for c in fallback_codes]
+        with ThreadPoolExecutor(max_workers=_tw) as pool:
+            list(pool.map(_fetch_task, tasks))
+
         official_ok = 0
         for code in fallback_codes:
-            df_off = _fetch_official_daily(code, hist_start, hist_end)
+            df_off = _rows_to_df(_code_rows.get(code, []), hist_start, hist_end)
             if df_off is not None and len(df_off) >= 5:
                 results[code] = df_off
                 official_ok += 1
-        print(f"  ✅ TWSE/TPEX 備援：{official_ok}/{len(fallback_codes)} 檔成功")
+
+        print(f"  ✅ TWSE/TPEX 備援：{official_ok}/{n_fb} 檔成功")
 
     if not results:
         try:
