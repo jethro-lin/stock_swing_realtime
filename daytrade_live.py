@@ -36,8 +36,10 @@
 import os
 import sys
 import io
+import json
 import math
 import time
+import asyncio
 import datetime
 import argparse
 import threading
@@ -47,6 +49,12 @@ import contextlib
 from collections import defaultdict
 
 import pandas as pd
+
+try:
+    import websockets
+    HAS_WS = True
+except ImportError:
+    HAS_WS = False
 
 # ──────────────────────────────────────────────
 # 常數
@@ -610,6 +618,116 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
         "RS": bool(bias > +8  and chg_pct < 0),
         # ── B2：大跳空(≥5%) + 量比≥0.8x ─────────────
         "B2": bool(gap_pct >= 5.0 and vol_ratio >= 0.8 and chg_pct > 0),
+    }
+
+
+# ──────────────────────────────────────────────
+# WebSocket 廣播伺服器
+# ──────────────────────────────────────────────
+class WsBroadcaster:
+    """
+    在獨立 asyncio 執行緒中跑 WebSocket server。
+    主執行緒呼叫 broadcast(dict) 即可推送 JSON 給所有已連線的客戶端。
+    pip install websockets
+    """
+    def __init__(self, port: int = 8765):
+        self._port    = port
+        self._clients: set = set()
+        self._loop:   asyncio.AbstractEventLoop | None = None
+        self._lock    = threading.Lock()
+
+    def start(self) -> bool:
+        if not HAS_WS:
+            print("  ⚠️  websockets 未安裝，WebSocket server 停用（pip install websockets）")
+            return False
+        ready = threading.Event()
+        t = threading.Thread(target=self._run, args=(ready,), daemon=True)
+        t.start()
+        if not ready.wait(timeout=5):
+            print("  ⚠️  WebSocket server 啟動逾時")
+            return False
+        print(f"  🌐 WebSocket server 啟動：ws://0.0.0.0:{self._port}")
+        return True
+
+    def _run(self, ready: threading.Event):
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_until_complete(self._serve(ready))
+
+    async def _serve(self, ready: threading.Event):
+        async with websockets.serve(self._handler, "0.0.0.0", self._port):
+            ready.set()
+            await asyncio.Future()   # run forever
+
+    async def _handler(self, ws):
+        with self._lock:
+            self._clients.add(ws)
+        try:
+            await ws.wait_closed()
+        finally:
+            with self._lock:
+                self._clients.discard(ws)
+
+    def broadcast(self, data: dict):
+        if not HAS_WS or self._loop is None:
+            return
+        msg = json.dumps(data, ensure_ascii=False)
+        asyncio.run_coroutine_threadsafe(self._send_all(msg), self._loop)
+
+    async def _send_all(self, msg: str):
+        with self._lock:
+            clients = list(self._clients)
+        if clients:
+            await asyncio.gather(*[c.send(msg) for c in clients],
+                                 return_exceptions=True)
+
+
+def _build_ws_payload(signals: dict, pm, alerts: list,
+                      scan_n: int, min_hit: int) -> dict:
+    """將目前掃描結果打包成 JSON-serializable dict 供 WebSocket 推送。"""
+    ws_signals = []
+    for code, info in signals.items():
+        sigs = info["sigs"]
+        q    = info["quote"]
+        long_hit  = sum(1 for k, v in sigs.items() if v and not k.endswith("S"))
+        short_hit = sum(1 for k, v in sigs.items() if v and k.endswith("S"))
+        ws_signals.append({
+            "code":           code,
+            "name":           q.get("name", code),
+            "price":          round(q.get("price", 0), 2),
+            "chg_pct":        round(q.get("chg_pct", 0), 2),
+            "hit_long":       long_hit,
+            "hit_short":      short_hit,
+            "hit":            max(long_hit, short_hit),
+            "direction":      "多" if long_hit >= short_hit else "空",
+            "active_signals": sorted(k for k, v in sigs.items() if v),
+            "update_time":    q.get("time", ""),
+        })
+    ws_signals.sort(key=lambda x: x["hit"], reverse=True)
+
+    positions = []
+    for pos in pm.get_positions():
+        positions.append({
+            "code":       pos["code"],
+            "name":       pos["name"],
+            "direction":  pos["direction"],
+            "entry":      pos["entry"],
+            "stop":       pos["stop"],
+            "curr_price": pos.get("curr_price", pos["entry"]),
+            "pnl_pct":    pos.get("pnl_pct", 0.0),
+            "status":     pos["status"],
+            "entered_at": pos["entered_at"],
+        })
+
+    return {
+        "type":      "update",
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+        "scan_n":    scan_n,
+        "min_hit":   min_hit,
+        "signals":   ws_signals,
+        "positions": positions,
+        "alerts":    alerts[-30:],
+        "summary":   pm.summary(),
     }
 
 
@@ -1272,6 +1390,8 @@ def main():
                         help="關閉 Windows 通知（只在終端機顯示）")
     parser.add_argument("--no-sound",   action="store_true",
                         help="關閉聲音提示")
+    parser.add_argument("--ws-port",    type=int,   default=8765,
+                        help="WebSocket server 埠號，預設 8765（0 = 關閉）")
     args = parser.parse_args()
 
     global _NOTIFY_ENABLED, _SOUND_ENABLED
@@ -1292,7 +1412,14 @@ def main():
     print(f"  停損設定：{args.stop_loss}%")
     print(f"  爆量倍數：{args.vol_mult}x")
     print(f"  畫面刷新：每 {args.refresh} 秒")
+    ws_port_str = str(args.ws_port) if args.ws_port else "停用"
+    print(f"  WebSocket：{ws_port_str}")
     print("═"*65 + "\n")
+
+    # 0. 啟動 WebSocket server（可選）
+    broadcaster = WsBroadcaster(port=args.ws_port) if args.ws_port else None
+    if broadcaster:
+        broadcaster.start()
 
     # 1. 連線 Shioaji（提前到 fetch_history 前，讓 kbars 可用）
     api_key    = os.environ.get("SJ_API_KEY", "").strip()
@@ -1427,6 +1554,13 @@ def main():
                 summary=pm.summary(),
                 min_hit=args.min_hit,
             )
+
+            # 廣播至 Android App
+            if broadcaster:
+                broadcaster.broadcast(
+                    _build_ws_payload(signals, pm, alerts, scan_n, args.min_hit)
+                )
+
             time.sleep(args.refresh)
 
     except KeyboardInterrupt:
