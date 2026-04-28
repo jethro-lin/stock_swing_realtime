@@ -66,7 +66,6 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
         // 股票清單變動時重新載入歷史資料
         viewModelScope.launch {
             stockCodes
-                .distinctUntilChanged()
                 .collect { codes ->
                     if (codes.isNotEmpty()) reloadAll(codes)
                 }
