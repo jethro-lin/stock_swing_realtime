@@ -9,9 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +32,7 @@ private val RedStrong   = Color(0xFFD50000)
 private val GreenLight  = Color(0xFFE8F5E9)
 private val RedLight    = Color(0xFFFFEBEE)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen(vm: StockViewModel) {
     val codes      by vm.stockCodes.collectAsState()
@@ -62,7 +59,7 @@ fun MainScreen(vm: StockViewModel) {
                             modifier = Modifier.padding(end = 4.dp))
                     }
                     IconButton(onClick = { vm.refresh() }, enabled = !isLoading) {
-                        Icon(Icons.Default.Refresh, contentDescription = "重新整理")
+                        Text("↻", fontSize = 20.sp)
                     }
                 }
             )
@@ -125,8 +122,7 @@ fun MainScreen(vm: StockViewModel) {
                                         onClick  = { vm.removeCode(code) },
                                         modifier = Modifier.size(16.dp),
                                     ) {
-                                        Icon(Icons.Default.Close, contentDescription = "移除 $code",
-                                            modifier = Modifier.size(12.dp))
+                                        Text("×", fontSize = 12.sp)
                                     }
                                 }
                             )
@@ -281,6 +277,7 @@ private fun SignalCard(result: SignalResult) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SignalChips(signals: List<String>, color: Color) {
     FlowRow(
