@@ -1207,25 +1207,28 @@ def fetch_data_cached(codes: list, days: int, datasource: str = "sinopac",
     full_codes: list = []      # 缺資料（要全量補）
     inc_codes: list  = []      # 只缺最近幾天（要增量補）
     inc_from: datetime.date | None = None  # 增量區間起點
-    yesterday = today - datetime.timedelta(days=1)
     min_required_rows = max(22, min(days, 250) // 2)  # 太少就視為不足
 
+    # 門檻設為「今日」：只要沒有今天的資料就嘗試增量補抓。
+    # 這樣收盤後執行 --scan 可自動抓當天資料，無需 --refresh-cache。
+    # 若市場尚未收盤或今天是非交易日，遠端 API 回傳空結果，快取保持不變。
     for code in codes:
         df = cached.get(code)
         if df is None or len(df) < min_required_rows:
             full_codes.append(code)
             continue
         latest = df.index[-1].date()
-        if latest < yesterday:
+        if latest < today:          # 改：只要不含今日資料就增量補
             inc_codes.append(code)
             cand = latest + datetime.timedelta(days=1)
             if inc_from is None or cand < inc_from:
                 inc_from = cand
 
+    already_fresh = len(codes) - len(full_codes) - len(inc_codes)
     print(f"  └── 全量補：{len(full_codes)} 檔  │  "
           f"增量補：{len(inc_codes)} 檔"
           + (f"（從 {inc_from}）" if inc_from else "")
-          + f"  │  快取已最新：{len(codes)-len(full_codes)-len(inc_codes)} 檔")
+          + f"  │  今日已最新：{already_fresh} 檔")
 
     if cache_only:
         if full_codes or inc_codes:
@@ -3051,8 +3054,167 @@ def print_table(df: pd.DataFrame, cols: list, title: str = ""):
         print(line)
 
 
+def save_scan_xlsx(df: pd.DataFrame, fname: str) -> None:
+    """
+    將選股結果 DataFrame 輸出為美化的 Excel 檔案。
+    - 標頭：深藍底白字，凍結首列，Auto Filter
+    - 資料列：依「價位區間」欄位著色
+    - 訊號欄：✅ 綠底綠字 / ❌ 保留列底色灰字
+    - 漲跌幅：正紅負綠；方向：多紅空綠
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ModuleNotFoundError:
+        csv_fname = fname.replace(".xlsx", ".csv")
+        df.to_csv(csv_fname, index=False, encoding="utf-8-sig")
+        print(f"  ⚠️  找不到 openpyxl，已改存 CSV：{csv_fname}")
+        print(f"  💡 安裝方式：pip install openpyxl")
+        return
+
+    # ── 顏色定義（openpyxl 需要 ARGB 8 碼，FF = 完全不透明）────
+    HDR_BG   = "FF1F4E79"   # 標頭背景（深藍）
+    HDR_FG   = "FFFFFFFF"   # 標頭文字（白）
+
+    GROUP_BG = {            # 各價位區間列底色
+        "<50":      "FFDEEBF7",   # 淡藍
+        "50~100":   "FFE2EFDA",   # 淡綠
+        "100~300":  "FFFFF2CC",   # 淡黃
+        "300~500":  "FFFCE4D6",   # 淡橙
+        "500~1000": "FFFFE6E6",   # 淡紅
+        ">1000":    "FFE8D5F0",   # 淡紫
+    }
+    SIG_YES_BG = "FFC6EFCE"   # ✅ 底色（淡綠）
+    SIG_YES_FG = "FF375623"   # ✅ 字色（深綠）
+    SIG_NO_FG  = "FFBFBFBF"   # ❌ 字色（灰）
+    BULL_FG    = "FFC00000"   # 多/正漲跌幅 紅
+    BEAR_FG    = "FF375623"   # 空/負漲跌幅 綠
+
+    # ── 欄寬設定 ────────────────────────────────────────────
+    FIXED_WIDTHS = {
+        "代號": 8, "名稱": 11, "資料日期": 11,
+        "收盤": 8, "價位區間": 10,
+        "漲跌幅(%)": 9, "成交量(張)": 10, "量/均量": 7,
+        "命中數": 6, "方向": 5,
+        "策略清單": 28, "命中組合": 36,
+    }
+    SIG_WIDTH = 5   # 訊號欄統一寬度
+
+    headers = list(df.columns)
+    # 判斷哪些欄是訊號欄（值只含 ✅ / ❌）
+    sig_cols: set = {
+        c for c in headers
+        if df[c].dropna().isin(["✅", "❌"]).all() and not df[c].dropna().empty
+    }
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "選股結果"
+
+    # ── 標頭列 ──────────────────────────────────────────────
+    hdr_font  = Font(name="Arial", bold=True, color=HDR_FG, size=10)
+    hdr_fill  = PatternFill("solid", start_color=HDR_BG)
+    hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[1].height = 30
+
+    for ci, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=ci, value=h)
+        cell.font  = hdr_font
+        cell.fill  = hdr_fill
+        cell.alignment = hdr_align
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    # ── 資料列 ──────────────────────────────────────────────
+    for ri, (_, row) in enumerate(df.iterrows(), 2):
+        grp    = str(row.get("價位區間", ""))
+        row_bg = GROUP_BG.get(grp, "FFFFFF")
+        row_fill = PatternFill("solid", start_color=row_bg)
+
+        for ci, col in enumerate(headers, 1):
+            val  = row[col]
+            cell = ws.cell(row=ri, column=ci, value=val)
+
+            if col in sig_cols:
+                # 訊號欄
+                if val == "✅":
+                    cell.fill  = PatternFill("solid", start_color=SIG_YES_BG)
+                    cell.font  = Font(name="Arial", size=9, color=SIG_YES_FG)
+                else:
+                    cell.fill  = row_fill
+                    cell.font  = Font(name="Arial", size=9, color=SIG_NO_FG)
+                cell.alignment = Alignment(horizontal="center")
+
+            elif col == "漲跌幅(%)":
+                try:
+                    fg = BULL_FG if float(val) >= 0 else BEAR_FG
+                except (TypeError, ValueError):
+                    fg = "000000"
+                cell.fill      = row_fill
+                cell.font      = Font(name="Arial", size=9, bold=True, color=fg)
+                cell.alignment = Alignment(horizontal="right")
+
+            elif col == "方向":
+                fg = BULL_FG if val == "多" else BEAR_FG
+                cell.fill      = row_fill
+                cell.font      = Font(name="Arial", size=9, bold=True, color=fg)
+                cell.alignment = Alignment(horizontal="center")
+
+            elif col == "命中數":
+                cell.fill      = row_fill
+                cell.font      = Font(name="Arial", size=9, bold=True)
+                cell.alignment = Alignment(horizontal="center")
+
+            elif col in ("代號", "名稱"):
+                cell.fill = row_fill
+                cell.font = Font(name="Arial", size=9, bold=True)
+
+            else:
+                cell.fill = row_fill
+                cell.font = Font(name="Arial", size=9)
+                if col in ("收盤", "成交量(張)", "量/均量"):
+                    cell.alignment = Alignment(horizontal="right")
+
+    # ── 欄寬 ────────────────────────────────────────────────
+    for ci, col in enumerate(headers, 1):
+        letter = get_column_letter(ci)
+        if col in sig_cols:
+            ws.column_dimensions[letter].width = SIG_WIDTH
+        else:
+            ws.column_dimensions[letter].width = FIXED_WIDTHS.get(col, 12)
+
+    wb.save(fname)
+
+
+# ── 股價分組設定（共用）──────────────────────────────────────
+_PRICE_BUCKETS = [
+    (0,    50,   "<50",       "🔵  低價股  ( 收盤 < 50 )"),
+    (50,   100,  "50~100",    "🟢  中低價  ( 50 ~ 100 )"),
+    (100,  300,  "100~300",   "🟡  中價股  ( 100 ~ 300 )"),
+    (300,  500,  "300~500",   "🟠  中高價  ( 300 ~ 500 )"),
+    (500,  1000, "500~1000",  "🔴  高價股  ( 500 ~ 1000 )"),
+    (1000, None, ">1000",     "🟣  超高價  ( > 1000 )"),
+]
+
+def price_group(close) -> str:
+    """依收盤價回傳簡短的價位區間標籤，供 CSV 欄位 & 終端機分組共用。"""
+    try:
+        c = float(close)
+    except (TypeError, ValueError):
+        return "N/A"
+    for lo, hi, label, _ in _PRICE_BUCKETS:
+        if hi is None:
+            return label
+        if c < hi:
+            return label
+    return ">1000"
+
+
 def print_scan_result(rows: list, date_str: str, min_hit: int,
                       show_combos: list = None):
+
     print("\n" + "═"*100)
     print(f"  📋 隔日沖選股彙整  {date_str}  命中門檻：≥{min_hit}")
     if show_combos:
@@ -3064,6 +3226,7 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
         print("  （今日無股票達到命中門檻）")
         return
     df = pd.DataFrame(rows)
+    df["_close_f"] = pd.to_numeric(df["收盤"], errors="coerce").fillna(0)
 
     # 有組合篩選時：精簡欄位，只顯示有觸發的策略欄 + 命中組合
     if show_combos:
@@ -3105,7 +3268,24 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
                 "B2大跳空",
                 "命中數","方向"]
 
-    print_table(df, cols)
+    # ── 依股價分組輸出 ─────────────────────────────────────────
+    any_printed = False
+    for lo, hi, _label_short, label_long in _PRICE_BUCKETS:
+        if hi is None:
+            mask = df["_close_f"] >= lo
+        else:
+            mask = (df["_close_f"] >= lo) & (df["_close_f"] < hi)
+        grp = df[mask].copy()
+        if grp.empty:
+            continue
+        any_printed = True
+        print(f"\n  {label_long}  （{len(grp)} 檔）")
+        print("  " + "─"*98)
+        print_table(grp, cols)
+
+    if not any_printed:
+        print("  （今日無股票達到命中門檻）")
+
     print("═"*100)
     print("  A多=均線突破(無爆量)  AS空=均線死亡+爆量  B多=跳空↑(無爆量)  BS空=跳空↓+爆量")
     print("  C多=RSI超賣  CS空=RSI超買  D多=突破前高  DS空=跌破前低")
@@ -3670,9 +3850,25 @@ def main():
             print(f"  💾 選股結果已存入 SQLite：{DB_PATH}")
 
             date_tag = args.date.replace("-", "") if args.date else datetime.date.today().strftime("%Y%m%d")
-            fname = f"隔日沖選股_{date_tag}.csv"
-            pd.DataFrame(rows).to_csv(fname, index=False, encoding="utf-8-sig")
-            print(f"  💾 CSV：{fname}")
+            df_out = pd.DataFrame(rows)
+            # 插入「價位區間」欄（緊接在「收盤」欄後面）
+            close_idx = df_out.columns.get_loc("收盤") + 1 if "收盤" in df_out.columns else 0
+            df_out.insert(close_idx, "價位區間", df_out["收盤"].apply(price_group))
+            # 排序：先依價位區間（依定義順序），再依命中數（高→低）
+            _group_order = {lo_hi_label[2]: i
+                            for i, lo_hi_label in enumerate(_PRICE_BUCKETS)}
+            df_out["_grp_ord"] = df_out["價位區間"].map(_group_order).fillna(99)
+            df_out = df_out.sort_values(["_grp_ord", "命中數"],
+                                        ascending=[True, False]).drop(columns=["_grp_ord"])
+            df_out = df_out.reset_index(drop=True)
+            # ── CSV（供 daytrade_live.py --csv 使用）
+            csv_fname = f"隔日沖選股_{date_tag}.csv"
+            df_out.to_csv(csv_fname, index=False, encoding="utf-8-sig")
+            print(f"  💾 CSV  ：{csv_fname}")
+            # ── Excel（美化版，供人工閱覽）
+            xlsx_fname = f"隔日沖選股_{date_tag}.xlsx"
+            save_scan_xlsx(df_out, xlsx_fname)
+            print(f"  💾 Excel：{xlsx_fname}")
 
     # ── 回測 ─────────────────────────────────────
     if args.backtest:
