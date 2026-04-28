@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.stockswing.app.ui
 
 import androidx.compose.foundation.BorderStroke
@@ -32,7 +34,7 @@ private val RedStrong   = Color(0xFFD50000)
 private val GreenLight  = Color(0xFFE8F5E9)
 private val RedLight    = Color(0xFFFFEBEE)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(vm: StockViewModel) {
     val codes      by vm.stockCodes.collectAsState()
@@ -277,7 +279,6 @@ private fun SignalCard(result: SignalResult) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SignalChips(signals: List<String>, color: Color) {
     FlowRow(
