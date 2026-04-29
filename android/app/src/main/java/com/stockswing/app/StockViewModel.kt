@@ -127,11 +127,13 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                         semaphore.withPermit {
                             ensureActive()
                             try {
-                                val bars = twseApi.fetchHistorical(code, months = 2)
+                                val raw = twseApi.fetchHistorical(code, months = 2)
+                                // 排除今日未完成 K 棒（盤中 API 可能已回傳今日不完整資料）
+                                val bars = raw.filter { it.date < java.time.LocalDate.now() }
                                 // 需至少 22 根：20 根建基準 + 1 根前日 + 1 根訊號日
                                 if (bars.size >= 22) {
-                                    val baseBars = bars.dropLast(1)   // 不含今日
-                                    val today    = bars.last()        // 訊號日（最近完成交易日）
+                                    val baseBars = bars.dropLast(1)   // 不含訊號日
+                                    val today    = bars.last()        // 訊號日 = 昨收（最近完成交易日）
                                     val prevDay  = bars[bars.size - 2]
 
                                     val base = StrategyEngine.buildBase(baseBars) ?: return@withPermit
