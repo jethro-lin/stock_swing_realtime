@@ -11,6 +11,15 @@ import sys, warnings, datetime, math, requests
 warnings.filterwarnings("ignore")
 sys.path.insert(0, ".")
 
+def _signal_cutoff():
+    """盤後（台灣時間 >=14:30）納入今日 K 棒，盤中排除，對齊 Android signalCutoff 邏輯。"""
+    import zoneinfo
+    now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Taipei"))
+    today = now.date()
+    is_intraday = (now.hour == 9 or now.hour in range(9, 14) or
+                   (now.hour == 14 and now.minute < 30))
+    return today if is_intraday else today + datetime.timedelta(days=1)
+
 COMBO_PRESETS = {
     "long3_lean": [
         ["M","R","B2"],["R","B2"],["B","K","R"],["B","K","L"],["B2","K"],
@@ -195,8 +204,8 @@ def matched_combos(sigs, preset_name):
 
 def check_code(code):
     bars = fetch_twse(code, months=3)
-    today = datetime.date.today()
-    bars = [b for b in bars if b["date"] < today]
+    cutoff = _signal_cutoff()
+    bars = [b for b in bars if b["date"] < cutoff]
     if len(bars) < 22:
         print(f"{code}: 資料不足 ({len(bars)} bars)")
         return None
@@ -256,13 +265,13 @@ if __name__ == "__main__":
             codes = ["2330","2317","2454","2412","3008","1303","2308","2382"]
         print(f"掃描 {len(codes)} 支股票...")
         data = fetch_data_twse(codes[:200], days=70)
-        today = datetime.date.today()
+        cutoff = _signal_cutoff()
         results = []
         for code, df in data.items():
             bars = []
             for _, row in df.reset_index().iterrows():
                 d = row.iloc[0].date() if hasattr(row.iloc[0],"date") else row["Date"].date()
-                if d >= today: continue
+                if d >= cutoff: continue
                 bars.append({"date":d,"Open":float(row["Open"]),"High":float(row["High"]),
                              "Low":float(row["Low"]),"Close":float(row["Close"]),"Vol_K":float(row["Vol_K"])})
             if len(bars) < 22: continue
