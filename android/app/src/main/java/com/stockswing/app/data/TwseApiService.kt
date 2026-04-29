@@ -19,6 +19,10 @@ private const val TAG = "StockApp"
 
 class TwseApiService(private val cacheDir: File? = null) {
 
+    init {
+        migrateLegacyCache()
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -27,6 +31,40 @@ class TwseApiService(private val cacheDir: File? = null) {
     private val json = Json { ignoreUnknownKeys = true }
 
     // ── K 棒磁碟快取 ─────────────────────────────────────────────────
+
+    /**
+     * 一次性搬遷：將舊格式 kbar/{date}/{code}.csv 搬到 kbar/{code}.csv。
+     * 只取最新日期目錄，不覆蓋已存在的新格式快取。
+     */
+    private fun migrateLegacyCache() {
+        val base = cacheDir ?: return
+        val kbarDir = File(base, "kbar")
+        if (!kbarDir.exists()) return
+
+        val latestDateDir = kbarDir.listFiles()
+            ?.filter { it.isDirectory && it.name.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+            ?.maxByOrNull { it.name }
+            ?: return
+
+        var migrated = 0
+        latestDateDir.listFiles()?.forEach { src ->
+            if (!src.name.endsWith(".csv")) return@forEach
+            val dest = File(kbarDir, src.name)
+            if (!dest.exists()) {
+                try {
+                    src.copyTo(dest)
+                    dest.setLastModified(src.lastModified())  // 保留原始 mtime 讓新鮮度判斷正確
+                    migrated++
+                } catch (e: Exception) {
+                    Log.w(TAG, "migration failed ${src.name}: $e")
+                }
+            }
+        }
+        if (migrated > 0)
+            Log.i(TAG, "migrateLegacyCache: $migrated files from ${latestDateDir.name}")
+        else
+            Log.d(TAG, "migrateLegacyCache: nothing to migrate from ${latestDateDir.name}")
+    }
 
     /** 快取檔案：{cacheDir}/kbar/{code}.csv（跨日保留，補檔更新）*/
     private fun kbarCacheFile(code: String): File? {

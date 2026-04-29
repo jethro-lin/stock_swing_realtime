@@ -118,9 +118,12 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                 val base: StrategyBase,
                 val quote: RealtimeQuote,
             )
-            val eodMap    = ConcurrentHashMap<String, EodEntry>()
-            val doneCount = AtomicInteger(0)
-            val semaphore = Semaphore(WORKERS)
+            val eodMap       = ConcurrentHashMap<String, EodEntry>()
+            val doneCount    = AtomicInteger(0)
+            val failEmpty    = AtomicInteger(0)   // fetch returned 0 bars
+            val failTooShort = AtomicInteger(0)   // bars < 22 after filter
+            val firstFails   = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val semaphore    = Semaphore(WORKERS)
             _scanProgress.value = 0 to allCodes.size
 
             val fmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd")
@@ -168,9 +171,12 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                                     )
                                     eodMap[code] = EodEntry(base, displayQuote)
                                 } else if (raw.isEmpty()) {
-                                    Log.d(TAG, "kbar[$code] fetch returned 0 bars")
+                                    failEmpty.incrementAndGet()
+                                    if (firstFails.size < 5) firstFails += "EMPTY:$code"
                                 } else {
-                                    Log.d(TAG, "kbar[$code] too short: raw=${raw.size} filtered=${bars.size} (need 22)")
+                                    failTooShort.incrementAndGet()
+                                    if (firstFails.size < 5)
+                                        firstFails += "SHORT:$code(raw=${raw.size},filtered=${bars.size})"
                                 }
                             } catch (e: Exception) {
                                 Log.w(TAG, "kbar[$code] exception: $e")
@@ -183,7 +189,10 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                 }.awaitAll()
             }
             _scanProgress.value = doneCount.get() to allCodes.size
-            Log.i(TAG, "scan: step2 done, eodMap.size=${eodMap.size}/${allCodes.size}")
+            Log.i(TAG, "scan: step2 done, eodMap=${eodMap.size}/${allCodes.size} " +
+                       "failEmpty=${failEmpty.get()} failShort=${failTooShort.get()}")
+            if (firstFails.isNotEmpty())
+                Log.w(TAG, "scan: first failures: $firstFails")
 
             if (eodMap.isEmpty()) {
                 Log.e(TAG, "scan: eodMap empty - all kbar fetches failed")
