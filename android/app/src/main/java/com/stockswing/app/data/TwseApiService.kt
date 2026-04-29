@@ -272,14 +272,16 @@ class TwseApiService(private val cacheDir: File? = null) {
         try {
             val url  = "https://www.twse.com.tw/exchangeReport/BWIBBU_d" +
                        "?response=json&selectType=ALL"
-            val body = get(url) ?: return@withContext emptyMap()
-            val root = json.parseToJsonElement(body).jsonObject
-            if (root["stat"]?.jsonPrimitive?.content == "OK") {
-                root["data"]?.jsonArray?.forEach { row ->
-                    val r    = row.jsonArray
-                    val code = r.getOrNull(0)?.jsonPrimitive?.content?.trim() ?: return@forEach
-                    val name = r.getOrNull(1)?.jsonPrimitive?.content?.trim() ?: code
-                    if (code.matches(Regex("\\d{4}"))) result[code] = name
+            val body = get(url)
+            if (body != null) {
+                val root = json.parseToJsonElement(body).jsonObject
+                if (root["stat"]?.jsonPrimitive?.content == "OK") {
+                    root["data"]?.jsonArray?.forEach { row ->
+                        val r    = row.jsonArray
+                        val code = r.getOrNull(0)?.jsonPrimitive?.content?.trim() ?: return@forEach
+                        val name = r.getOrNull(1)?.jsonPrimitive?.content?.trim() ?: code
+                        if (code.matches(Regex("\\d{4}"))) result[code] = name
+                    }
                 }
             }
         } catch (_: Exception) {}
@@ -287,14 +289,16 @@ class TwseApiService(private val cacheDir: File? = null) {
         // 上櫃（TPEX openapi）
         try {
             val url  = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"
-            val body = get(url) ?: return@withContext result
-            val arr  = json.parseToJsonElement(body).jsonArray
-            arr.forEach { item ->
-                val obj  = item.jsonObject
-                val code = obj["SecuritiesCompanyCode"]?.jsonPrimitive?.content?.trim()
-                    ?: return@forEach
-                val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
-                if (code.matches(Regex("\\d{4}"))) result[code] = name
+            val body = get(url)
+            if (body != null) {
+                val arr = json.parseToJsonElement(body).jsonArray
+                arr.forEach { item ->
+                    val obj  = item.jsonObject
+                    val code = obj["SecuritiesCompanyCode"]?.jsonPrimitive?.content?.trim()
+                        ?: return@forEach
+                    val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
+                    if (code.matches(Regex("\\d{4}"))) result[code] = name
+                }
             }
         } catch (_: Exception) {}
 
