@@ -29,7 +29,7 @@ private val SELECTED_PRESETS_KEY = stringPreferencesKey("selected_presets_v2")
 
 class StockViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val twseApi = TwseApiService()
+    private val twseApi = TwseApiService(cacheDir = app.cacheDir)
 
     companion object {
         private const val WORKERS = 5  // 並行下載數；避免 TWSE rate-limit
@@ -108,8 +108,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
             val allCodes = codeNames.keys.toList()
 
             // 2. 並行下載歷史 K 棒（EOD 模式）
-            //    每支：buildBase(bars[:-1])  →  checkSignals 用 bars[-1] 的實際 OHLCV
-            //    這樣 gapPct = (今開 - 昨收)/昨收，chgPct = 今收 vs 昨收，與 Python 一致
+            //    buildBase(bars) 以 bars[-1]=訊號日、bars[-2]=昨日 計算指標，對齊 Python win[-1]
             data class EodEntry(
                 val base: StrategyBase,
                 val quote: RealtimeQuote,
@@ -131,16 +130,12 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                                 // 排除今日未完成 K 棒（盤中 API 可能已回傳今日不完整資料）
                                 val bars = raw.filter { it.date < java.time.LocalDate.now() }
                                 // 需至少 22 根：20 根建基準 + 1 根前日 + 1 根訊號日
+                                // bars[-1]=訊號日, bars[-2]=昨日；傳入全部讓 buildBase 對齊 Python win[-1]=today
                                 if (bars.size >= 22) {
-                                    val baseBars = bars.dropLast(1)   // 不含訊號日
-                                    val today    = bars.last()        // 訊號日 = 昨收（最近完成交易日）
-                                    val prevDay  = bars[bars.size - 2]
+                                    val today   = bars.last()        // 訊號日
+                                    val prevDay = bars[bars.size - 2] // 昨日
 
-                                    val base = StrategyEngine.buildBase(baseBars) ?: return@withPermit
-                                    // 用今日量取代 base.volYesterday（爆量基準更準確）
-                                    val baseAdj = base.copy(
-                                        volYesterday = today.volumeLots.toDouble()
-                                    )
+                                    val base = StrategyEngine.buildBase(bars) ?: return@withPermit
                                     val chgPct = if (prevDay.close > 0)
                                         (today.close - prevDay.close) / prevDay.close * 100.0
                                     else 0.0
@@ -157,7 +152,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                                         totalVolLots = today.volumeLots,
                                         updateTime   = today.date.format(fmt),
                                     )
-                                    eodMap[code] = EodEntry(baseAdj, displayQuote)
+                                    eodMap[code] = EodEntry(base, displayQuote)
                                 }
                             } catch (_: Exception) {}
                             val done = doneCount.incrementAndGet()

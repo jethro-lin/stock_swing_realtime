@@ -78,7 +78,8 @@ object TechnicalIndicators {
             val n = minOf(period, endIdx + 1)
             val slice = closes.copyOfRange(endIdx - n + 1, endIdx + 1)
             val mean  = slice.average()
-            val variance = slice.map { (it - mean) * (it - mean) }.average()
+            // ddof=1 sample std, matching pandas rolling().std()
+            val variance = if (slice.size > 1) slice.sumOf { (it - mean) * (it - mean) } / (slice.size - 1) else 0.0
             val std  = Math.sqrt(variance)
             return Pair(mean + k * std, mean - k * std)
         }

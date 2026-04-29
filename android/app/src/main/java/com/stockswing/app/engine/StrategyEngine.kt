@@ -31,17 +31,20 @@ object StrategyEngine {
 
         val n = bars.size
 
+        // bars[-1] = signal day (today), bars[-2] = yesterday, matching Python's win[-1]/win[-2]
+
         // ── 量 ────────────────────────────────────────────────────────
-        val avg5       = volsK.takeLast(5).average()
+        // avg5/hi5/lo5 use 5 days BEFORE signal day, same as Python iloc[-6:-1]
+        val avg5       = volsK.copyOfRange(n - 6, n - 1).average()
         if (avg5 < MIN_AVG_VOL) return null
 
         val avg20Vol   = if (n >= 22) volsK.copyOfRange(n - 21, n - 1).average() else avg5
-        val volYesterday = volsK[n - 1]
+        val volYesterday = volsK[n - 1]  // signal day volume, used for volRatio
         val volExpand  = if (avg20Vol > 0) avg5 > avg20Vol * 1.2 else false
         val volShrink  = if (avg20Vol > 0) avg5 < avg20Vol * 0.8 else false
-        val tideShrink = if (n >= 5) (1..3).all { j -> volsK[n - j - 1] < volsK[n - j - 2] } else false
+        val tideShrink = if (n >= 6) (1..3).all { j -> volsK[n - j - 1] < volsK[n - j - 2] } else false
 
-        // ── 均線 ─────────────────────────────────────────────────────
+        // ── 均線（含今日，與 Python 一致）────────────────────────────
         val ma5  = closes.takeLast(5).average()
         val ma10 = if (closes.size >= 10) closes.takeLast(10).average() else ma5
         val ma20 = closes.takeLast(20).average()
@@ -50,17 +53,17 @@ object StrategyEngine {
         val rsiArr = TechnicalIndicators.rsi(closes)
         val rsiNow = rsiArr[0]; val rsiPrv = rsiArr[1]
 
-        // ── 5日高低 ──────────────────────────────────────────────────
-        val high5 = highs.takeLast(5).max()
-        val low5  = lows.takeLast(5).min()
+        // ── 5日高低（訊號日前5日，不含今日）─────────────────────────
+        val high5 = highs.copyOfRange(n - 6, n - 1).max()
+        val low5  = lows.copyOfRange(n - 6, n - 1).min()
 
-        // ── 三連漲/跌 ────────────────────────────────────────────────
-        val threeUp = if (n >= 4) (1..3).all { j -> closes[n-j-1] > opens[n-j-1] } else false
-        val threeDn = if (n >= 4) (1..3).all { j -> closes[n-j-1] < opens[n-j-1] } else false
+        // ── 三連漲/跌（訊號日前3根 K 棒，n-2/n-3/n-4）────────────────
+        val threeUp = if (n >= 5) (1..3).all { j -> closes[n-j-1] > opens[n-j-1] } else false
+        val threeDn = if (n >= 5) (1..3).all { j -> closes[n-j-1] < opens[n-j-1] } else false
 
-        // ── 昨日K棒 ─────────────────────────────────────────────────
-        val prevClose = closes[n - 1]
-        val prevOpen  = opens[n - 1]
+        // ── 昨日K棒（bars[-2] = 訊號日前一日）─────────────────────────
+        val prevClose = closes[n - 2]
+        val prevOpen  = opens[n - 2]
         val prevBody  = abs(prevClose - prevOpen)
         val prevBull  = prevClose > prevOpen
         val prevBear  = prevClose < prevOpen
@@ -82,28 +85,28 @@ object StrategyEngine {
         val wr = TechnicalIndicators.williamsR(highs, lows, closes)
         val wrT = wr[0]; val wrP = wr[1]
 
-        // ── 晨星/黃昏之星（需要前兩日）───────────────────────────────
+        // ── 晨星/黃昏之星（D1 = 訊號日前2日 = bars[-3]）────────────────
         val starD1Body: Double; val starD1Mid: Double
         val starD1Bear: Boolean; val starD1Bull: Boolean
-        if (n >= 3) {
-            val d1O = opens[n - 2]; val d1C = closes[n - 2]
+        if (n >= 4) {
+            val d1O = opens[n - 3]; val d1C = closes[n - 3]
             starD1Body = abs(d1C - d1O); starD1Mid = (d1C + d1O) / 2
             starD1Bear = d1C < d1O;      starD1Bull = d1C > d1O
         } else {
             starD1Body = 0.0; starD1Mid = prevClose
             starD1Bear = false; starD1Bull = false
         }
-        val starD2Body = prevBody
+        val starD2Body = prevBody  // D2 = yesterday = bars[-2]
 
-        // ── 紅三兵/黑三兵 ────────────────────────────────────────────
-        val solD1O = if (n >= 3) opens[n - 2] else prevOpen
-        val solD1C = if (n >= 3) closes[n - 2] else prevClose
+        // ── 紅三兵/黑三兵（D1 = bars[-3]，D2 = bars[-2] = yesterday）──
+        val solD1O = if (n >= 4) opens[n - 3] else prevOpen
+        val solD1C = if (n >= 4) closes[n - 3] else prevClose
 
-        // ── Inside Bar ───────────────────────────────────────────────
+        // ── Inside Bar（prev = yesterday = bars[-2]，prev2 = bars[-3]）─
         val ibPrev2H: Double; val ibPrev2L: Double; val ibIsInside: Boolean
-        if (n >= 2) {
-            ibPrev2H = highs[n - 2]; ibPrev2L = lows[n - 2]
-            ibIsInside = highs[n - 1] < ibPrev2H && lows[n - 1] > ibPrev2L
+        if (n >= 3) {
+            ibPrev2H = highs[n - 3]; ibPrev2L = lows[n - 3]
+            ibIsInside = highs[n - 2] < ibPrev2H && lows[n - 2] > ibPrev2L
         } else {
             ibPrev2H = 0.0; ibPrev2L = 0.0; ibIsInside = false
         }

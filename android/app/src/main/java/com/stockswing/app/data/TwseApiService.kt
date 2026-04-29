@@ -8,12 +8,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
-class TwseApiService {
+class TwseApiService(private val cacheDir: File? = null) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -22,15 +23,56 @@ class TwseApiService {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    // ── K 棒磁碟快取 ─────────────────────────────────────────────────
+
+    /** 快取目錄：{cacheDir}/kbar/{today}/ */
+    private fun kbarCacheDir(): File? {
+        val base = cacheDir ?: return null
+        return File(base, "kbar/${LocalDate.now()}").also { it.mkdirs() }
+    }
+
+    private fun loadCache(code: String): List<HistoricalBar>? {
+        val dir = kbarCacheDir() ?: return null
+        val file = File(dir, "$code.csv")
+        if (!file.exists()) return null
+        return try {
+            file.readLines().mapNotNull { line ->
+                val p = line.split("|")
+                if (p.size != 6) null
+                else HistoricalBar(
+                    date       = LocalDate.parse(p[0]),
+                    open       = p[1].toDouble(),
+                    high       = p[2].toDouble(),
+                    low        = p[3].toDouble(),
+                    close      = p[4].toDouble(),
+                    volumeLots = p[5].toLong(),
+                )
+            }.ifEmpty { null }
+        } catch (_: Exception) { null }
+    }
+
+    private fun saveCache(code: String, bars: List<HistoricalBar>) {
+        val dir = kbarCacheDir() ?: return
+        try {
+            File(dir, "$code.csv").writeText(
+                bars.joinToString("\n") { b ->
+                    "${b.date}|${b.open}|${b.high}|${b.low}|${b.close}|${b.volumeLots}"
+                }
+            )
+        } catch (_: Exception) {}
+    }
+
     // ── 歷史日K ──────────────────────────────────────────────────────
 
     /**
-     * 抓最近 [months] 個月的日K。
+     * 抓最近 [months] 個月的日K。快取命中則直接回傳，否則從 TWSE/TPEX 下載並寫入快取。
      * 先試 TWSE（上市），若無資料改試 TPEX（上櫃）。
      * 回傳以日期升冪排序、去重的 bar list。
      */
     suspend fun fetchHistorical(code: String, months: Int = 6): List<HistoricalBar> =
         withContext(Dispatchers.IO) {
+            loadCache(code)?.let { return@withContext it }
+
             val today = LocalDate.now()
             val bars  = mutableListOf<HistoricalBar>()
 
@@ -50,7 +92,9 @@ class TwseApiService {
                 delay(150)  // 避免觸發 TWSE rate limit
             }
 
-            bars.sortedBy { it.date }.distinctBy { it.date }
+            val result = bars.sortedBy { it.date }.distinctBy { it.date }
+            if (result.isNotEmpty()) saveCache(code, result)
+            result
         }
 
     private suspend fun fetchTwseMonth(code: String, ym: String): List<HistoricalBar>? =
