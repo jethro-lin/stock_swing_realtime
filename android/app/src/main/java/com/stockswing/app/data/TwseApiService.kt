@@ -187,11 +187,13 @@ class TwseApiService(private val cacheDir: File? = null) {
                 delay(150)  // 避免觸發 TWSE rate limit
             }
 
-            // 合併舊快取 + 新抓資料，去重排序後存檔（含假日無新資料的情況，仍更新 mtime）
             val result = ((stale ?: emptyList()) + newBars)
                 .sortedBy { it.date }.distinctBy { it.date }
             Log.d(TAG, "fetchHistorical[$code] done: ${result.size} bars total (new=${newBars.size})")
-            if (result.isNotEmpty()) saveCache(code, result)
+            // 只有真正取得新資料才存檔（更新 mtime）；
+            // 若 newBars 為空代表 API 暫時失敗，保留舊 mtime=0 讓下次繼續重試，
+            // 避免存回舊資料後 mtime=today 誤觸假日邏輯而卡死。
+            if (result.isNotEmpty() && (newBars.isNotEmpty() || stale == null)) saveCache(code, result)
             result
         }
 
