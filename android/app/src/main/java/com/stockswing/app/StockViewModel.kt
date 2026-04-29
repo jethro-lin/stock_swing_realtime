@@ -16,7 +16,7 @@ import com.stockswing.app.engine.StrategyEngine
 import com.stockswing.app.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.time.LocalTime
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 private val Context.dataStore by preferencesDataStore("settings")
@@ -157,7 +157,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
             )
 
             _scanResults.value  = results
-            _lastScanTime.value = LocalTime.now()
+            _lastScanTime.value = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("MM/dd HH:mm"))
             _loadingMsg.value   = ""
             _isLoading.value    = false
