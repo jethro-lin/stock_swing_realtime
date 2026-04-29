@@ -96,21 +96,30 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
             _error.value        = null
             _scanProgress.value = 0 to 0
 
-            // 1. 取得全市場代號
+            // 1. 取得全市場代號 + 公司名稱
             _loadingMsg.value = "取得上市/上櫃股票清單…"
-            val allCodes = twseApi.fetchAllCodes()
-            if (allCodes.isEmpty()) {
+            val codeNames = twseApi.fetchAllCodesWithNames()
+            if (codeNames.isEmpty()) {
                 _error.value      = "無法取得股票清單，請確認網路狀況"
                 _isLoading.value  = false
                 _loadingMsg.value = ""
                 return@launch
             }
+            val allCodes = codeNames.keys.toList()
 
-            // 2. 並行下載（最多 WORKERS 個同時），buildBase 會過濾低流動性
-            val bases     = ConcurrentHashMap<String, StrategyBase>()
+            // 2. 並行下載歷史 K 棒（EOD 模式）
+            //    每支：buildBase(bars[:-1])  →  checkSignals 用 bars[-1] 的實際 OHLCV
+            //    這樣 gapPct = (今開 - 昨收)/昨收，chgPct = 今收 vs 昨收，與 Python 一致
+            data class EodEntry(
+                val base: StrategyBase,
+                val quote: RealtimeQuote,
+            )
+            val eodMap    = ConcurrentHashMap<String, EodEntry>()
             val doneCount = AtomicInteger(0)
             val semaphore = Semaphore(WORKERS)
             _scanProgress.value = 0 to allCodes.size
+
+            val fmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd")
 
             coroutineScope {
                 allCodes.map { code ->
@@ -119,8 +128,34 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                             ensureActive()
                             try {
                                 val bars = twseApi.fetchHistorical(code, months = 2)
-                                if (bars.size >= 20) {
-                                    StrategyEngine.buildBase(bars)?.let { bases[code] = it }
+                                // 需至少 22 根：20 根建基準 + 1 根前日 + 1 根訊號日
+                                if (bars.size >= 22) {
+                                    val baseBars = bars.dropLast(1)   // 不含今日
+                                    val today    = bars.last()        // 訊號日（最近完成交易日）
+                                    val prevDay  = bars[bars.size - 2]
+
+                                    val base = StrategyEngine.buildBase(baseBars) ?: return@withPermit
+                                    // 用今日量取代 base.volYesterday（爆量基準更準確）
+                                    val baseAdj = base.copy(
+                                        volYesterday = today.volumeLots.toDouble()
+                                    )
+                                    val chgPct = if (prevDay.close > 0)
+                                        (today.close - prevDay.close) / prevDay.close * 100.0
+                                    else 0.0
+
+                                    val displayQuote = RealtimeQuote(
+                                        code         = code,
+                                        name         = codeNames[code] ?: code,
+                                        price        = today.close,
+                                        open         = today.open,
+                                        high         = today.high,
+                                        low          = today.low,
+                                        prevClose    = prevDay.close,
+                                        chgPct       = chgPct,
+                                        totalVolLots = today.volumeLots,
+                                        updateTime   = today.date.format(fmt),
+                                    )
+                                    eodMap[code] = EodEntry(baseAdj, displayQuote)
                                 }
                             } catch (_: Exception) {}
                             val done = doneCount.incrementAndGet()
@@ -132,30 +167,25 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
             }
             _scanProgress.value = doneCount.get() to allCodes.size
 
-            if (bases.isEmpty()) {
-                _error.value     = "無法計算技術指標，請確認網路狀況後重新掃描"
-                _isLoading.value = false
+            if (eodMap.isEmpty()) {
+                _error.value      = "無法計算技術指標，請確認網路狀況後重新掃描"
+                _isLoading.value  = false
                 _loadingMsg.value = ""
                 return@launch
             }
 
-            // 3. 批次抓即時行情
-            _loadingMsg.value = "抓取即時行情（${bases.size} 支）…"
-            val quotes = try { twseApi.fetchRealtimePrice(bases.keys.toList()) }
-                         catch (_: Exception) { emptyMap() }
-
-            // 4. 計算訊號、按選擇的 preset combo 篩選
+            // 3. 計算訊號、按選擇的 preset combo 篩選（純 CPU，不再需要即時行情 API）
+            _loadingMsg.value = "計算策略訊號…"
             val presets = selectedPresets.value
-            val results = bases.keys.mapNotNull { code ->
-                val base  = bases[code]  ?: return@mapNotNull null
-                val quote = quotes[code] ?: return@mapNotNull null
-                val sigs  = StrategyEngine.checkSignals(
-                    base   = base,
-                    price  = quote.price,
-                    openP  = quote.open,
-                    chgPct = quote.chgPct,
-                    highP  = quote.high,
-                    lowP   = quote.low,
+            val results = eodMap.entries.mapNotNull { (code, entry) ->
+                val (base, quote) = entry
+                val sigs = StrategyEngine.checkSignals(
+                    base    = base,
+                    price   = quote.price,
+                    openP   = quote.open,
+                    chgPct  = quote.chgPct,
+                    highP   = quote.high,
+                    lowP    = quote.low,
                 )
                 val hitMap = presets
                     .associateWith { sigs.matchedComboLabels(it) }

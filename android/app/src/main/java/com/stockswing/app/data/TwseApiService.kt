@@ -179,24 +179,26 @@ class TwseApiService {
     // ── 全市場股票代號 ────────────────────────────────────────────────
 
     /**
-     * 從 TWSE BWIBBU_d（本益比/殖利率表）取得所有上市股票代號。
-     * 同時嘗試 TPEX openapi 取得上櫃代號。
-     * 只回傳 4–6 位純數字代號（排除 ETF、權證等）。
+     * 取得全市場上市/上櫃股票代號 → 公司名稱對應表。
+     * 上市來源：TWSE BWIBBU_d（欄 0=代號, 1=名稱）。
+     * 上櫃來源：TPEX openapi peratio_analysis（SecuritiesCompanyCode / CompanyName）。
+     * 只保留 4 位純數字代號（排除 ETF、權證）。
      */
-    suspend fun fetchAllCodes(): List<String> = withContext(Dispatchers.IO) {
-        val codes = mutableListOf<String>()
+    suspend fun fetchAllCodesWithNames(): Map<String, String> = withContext(Dispatchers.IO) {
+        val result = mutableMapOf<String, String>()
 
         // 上市（TWSE）
         try {
             val url  = "https://www.twse.com.tw/exchangeReport/BWIBBU_d" +
                        "?response=json&selectType=ALL"
-            val body = get(url) ?: return@withContext emptyList()
+            val body = get(url) ?: return@withContext emptyMap()
             val root = json.parseToJsonElement(body).jsonObject
             if (root["stat"]?.jsonPrimitive?.content == "OK") {
                 root["data"]?.jsonArray?.forEach { row ->
-                    val code = row.jsonArray.getOrNull(0)
-                        ?.jsonPrimitive?.content?.trim() ?: return@forEach
-                    if (code.matches(Regex("\\d{4}"))) codes += code
+                    val r    = row.jsonArray
+                    val code = r.getOrNull(0)?.jsonPrimitive?.content?.trim() ?: return@forEach
+                    val name = r.getOrNull(1)?.jsonPrimitive?.content?.trim() ?: code
+                    if (code.matches(Regex("\\d{4}"))) result[code] = name
                 }
             }
         } catch (_: Exception) {}
@@ -204,16 +206,18 @@ class TwseApiService {
         // 上櫃（TPEX openapi）
         try {
             val url  = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"
-            val body = get(url) ?: return@withContext codes
+            val body = get(url) ?: return@withContext result
             val arr  = json.parseToJsonElement(body).jsonArray
             arr.forEach { item ->
-                val code = item.jsonObject["SecuritiesCompanyCode"]
-                    ?.jsonPrimitive?.content?.trim() ?: return@forEach
-                if (code.matches(Regex("\\d{4}"))) codes += code
+                val obj  = item.jsonObject
+                val code = obj["SecuritiesCompanyCode"]?.jsonPrimitive?.content?.trim()
+                    ?: return@forEach
+                val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
+                if (code.matches(Regex("\\d{4}"))) result[code] = name
             }
         } catch (_: Exception) {}
 
-        codes.distinct()
+        result
     }
 
     // ── 工具 ─────────────────────────────────────────────────────────
