@@ -1,5 +1,6 @@
 package com.stockswing.app.data
 
+import android.util.Log
 import com.stockswing.app.model.HistoricalBar
 import com.stockswing.app.model.RealtimeQuote
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +14,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
+
+private const val TAG = "StockApp"
 
 class TwseApiService(private val cacheDir: File? = null) {
 
@@ -48,12 +51,15 @@ class TwseApiService(private val cacheDir: File? = null) {
                     volumeLots = p[5].toLong(),
                 )
             }.ifEmpty { null }
-        } catch (_: Exception) { null }
+        } catch (e: Exception) {
+            Log.w(TAG, "readCacheRaw[$code] parse error: $e")
+            null
+        }
     }
 
     /**
      * 讀取快取並檢查新鮮度。
-     * 盤後（台灣時間 ≥14:30）若不含今日 K 棒且檔案今日尚未更新，回傳 null 觸發補檔。
+     * 盤後（台灣時間 >=14:30）若不含今日 K 棒且檔案今日尚未更新，回傳 null 觸發補檔。
      * 若檔案今日已更新（假日/休市），則接受快取避免無限重試。
      */
     private fun loadCache(code: String): List<HistoricalBar>? {
@@ -68,9 +74,14 @@ class TwseApiService(private val cacheDir: File? = null) {
             if (bars.none { it.date == today }) {
                 val fileDate = java.time.Instant.ofEpochMilli(file.lastModified())
                     .atZone(java.time.ZoneId.of("Asia/Taipei")).toLocalDate()
-                if (fileDate < today) return null  // 昨日快取，需補今日
+                if (fileDate < today) {
+                    Log.d(TAG, "cache[$code] stale: lastBar=${bars.last().date}, fileDate=$fileDate -> refetch")
+                    return null
+                }
+                Log.d(TAG, "cache[$code] afterClose no today bar but file updated today (holiday) -> accept ${bars.size} bars")
             }
         }
+        Log.d(TAG, "cache[$code] hit: ${bars.size} bars, last=${bars.last().date}")
         return bars
     }
 
@@ -80,21 +91,24 @@ class TwseApiService(private val cacheDir: File? = null) {
             file.writeText(bars.joinToString("\n") { b ->
                 "${b.date}|${b.open}|${b.high}|${b.low}|${b.close}|${b.volumeLots}"
             })
-        } catch (_: Exception) {}
+            Log.d(TAG, "cache[$code] saved: ${bars.size} bars, last=${bars.last().date}")
+        } catch (e: Exception) {
+            Log.w(TAG, "cache[$code] save failed: $e")
+        }
     }
 
     // ── 歷史日K ──────────────────────────────────────────────────────
 
     /**
      * 取得日K，優先使用磁碟快取，只補抓缺少的月份。
-     * - 快取新鮮 → 直接回傳
-     * - 快取存在但過期 → 從最後一筆的當月開始補抓，合併後存檔
-     * - 無快取 → 全量下載 [months] 個月
+     * - 快取新鮮 -> 直接回傳
+     * - 快取存在但過期 -> 從最後一筆的當月開始補抓，合併後存檔
+     * - 無快取 -> 全量下載 [months] 個月
      * 先試 TWSE（上市），若無資料改試 TPEX（上櫃）。
      */
     suspend fun fetchHistorical(code: String, months: Int = 6): List<HistoricalBar> =
         withContext(Dispatchers.IO) {
-            // 快取新鮮 → 直接回傳，不需要任何 HTTP 請求
+            // 快取新鮮 -> 直接回傳，不需要任何 HTTP 請求
             loadCache(code)?.let { return@withContext it }
 
             val today = LocalDate.now()
@@ -110,6 +124,8 @@ class TwseApiService(private val cacheDir: File? = null) {
             val monthsToFetch = (today.year - fetchFrom.year) * 12 +
                                  (today.monthValue - fetchFrom.monthValue)
 
+            Log.d(TAG, "fetchHistorical[$code] stale=${stale?.size ?: "none"}, fetchFrom=$fetchFrom, monthsToFetch=$monthsToFetch")
+
             val newBars = mutableListOf<HistoricalBar>()
             for (m in monthsToFetch downTo 0) {
                 val date  = today.minusMonths(m.toLong())
@@ -119,10 +135,16 @@ class TwseApiService(private val cacheDir: File? = null) {
 
                 val twse = fetchTwseMonth(code, ym)
                 if (twse != null) {
+                    Log.d(TAG, "  twse[$code][$ym] -> ${twse.size} bars")
                     newBars += twse
                 } else {
                     val tpex = fetchTpexMonth(code, rocY, rocMM)
-                    if (tpex != null) newBars += tpex
+                    if (tpex != null) {
+                        Log.d(TAG, "  tpex[$code][$rocY/$rocMM] -> ${tpex.size} bars")
+                        newBars += tpex
+                    } else {
+                        Log.d(TAG, "  both miss[$code][$ym]")
+                    }
                 }
                 delay(150)  // 避免觸發 TWSE rate limit
             }
@@ -130,6 +152,7 @@ class TwseApiService(private val cacheDir: File? = null) {
             // 合併舊快取 + 新抓資料，去重排序後存檔（含假日無新資料的情況，仍更新 mtime）
             val result = ((stale ?: emptyList()) + newBars)
                 .sortedBy { it.date }.distinctBy { it.date }
+            Log.d(TAG, "fetchHistorical[$code] done: ${result.size} bars total (new=${newBars.size})")
             if (result.isNotEmpty()) saveCache(code, result)
             result
         }
@@ -141,7 +164,11 @@ class TwseApiService(private val cacheDir: File? = null) {
                           "?response=json&date=${ym}01&stockNo=$code"
                 val body = get(url) ?: return@withContext null
                 val root = json.parseToJsonElement(body).jsonObject
-                if (root["stat"]?.jsonPrimitive?.content != "OK") return@withContext null
+                val stat = root["stat"]?.jsonPrimitive?.content
+                if (stat != "OK") {
+                    Log.d(TAG, "twse[$code][$ym] stat=$stat")
+                    return@withContext null
+                }
                 val data = root["data"]?.jsonArray ?: return@withContext null
 
                 data.mapNotNull { row ->
@@ -160,7 +187,10 @@ class TwseApiService(private val cacheDir: File? = null) {
                         )
                     } catch (_: Exception) { null }
                 }
-            } catch (_: Exception) { null }
+            } catch (e: Exception) {
+                Log.w(TAG, "twse[$code][$ym] exception: $e")
+                null
+            }
         }
 
     private suspend fun fetchTpexMonth(code: String, rocYear: Int, rocMM: String): List<HistoricalBar>? =
@@ -191,7 +221,10 @@ class TwseApiService(private val cacheDir: File? = null) {
                         )
                     } catch (_: Exception) { null }
                 }
-            } catch (_: Exception) { null }
+            } catch (e: Exception) {
+                Log.w(TAG, "tpex[$code][$rocYear/$rocMM] exception: $e")
+                null
+            }
         }
 
     // ── 即時行情（TWSE MIS API）───────────────────────────────────────
@@ -251,7 +284,9 @@ class TwseApiService(private val cacheDir: File? = null) {
                             )
                         } catch (_: Exception) { }
                     }
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    Log.w(TAG, "fetchRealtimePrice batch exception: $e")
+                }
                 delay(200)
             }
             result
@@ -260,7 +295,7 @@ class TwseApiService(private val cacheDir: File? = null) {
     // ── 全市場股票代號 ────────────────────────────────────────────────
 
     /**
-     * 取得全市場上市/上櫃股票代號 → 公司名稱對應表。
+     * 取得全市場上市/上櫃股票代號 -> 公司名稱對應表。
      * 上市來源：TWSE BWIBBU_d（欄 0=代號, 1=名稱）。
      * 上櫃來源：TPEX openapi peratio_analysis（SecuritiesCompanyCode / CompanyName）。
      * 只保留 4 位純數字代號（排除 ETF、權證）。
@@ -272,25 +307,39 @@ class TwseApiService(private val cacheDir: File? = null) {
         try {
             val url  = "https://www.twse.com.tw/exchangeReport/BWIBBU_d" +
                        "?response=json&selectType=ALL"
+            Log.d(TAG, "fetchAllCodes: TWSE request start")
             val body = get(url)
-            if (body != null) {
+            if (body == null) {
+                Log.w(TAG, "fetchAllCodes: TWSE body null (network error?)")
+            } else {
                 val root = json.parseToJsonElement(body).jsonObject
-                if (root["stat"]?.jsonPrimitive?.content == "OK") {
+                val stat = root["stat"]?.jsonPrimitive?.content
+                if (stat == "OK") {
                     root["data"]?.jsonArray?.forEach { row ->
                         val r    = row.jsonArray
                         val code = r.getOrNull(0)?.jsonPrimitive?.content?.trim() ?: return@forEach
                         val name = r.getOrNull(1)?.jsonPrimitive?.content?.trim() ?: code
                         if (code.matches(Regex("\\d{4}"))) result[code] = name
                     }
+                    Log.d(TAG, "fetchAllCodes: TWSE OK, listed=${result.size}")
+                } else {
+                    Log.w(TAG, "fetchAllCodes: TWSE stat=$stat body(100)=${body.take(100)}")
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchAllCodes: TWSE exception: $e")
+        }
+
+        val twseCount = result.size
 
         // 上櫃（TPEX openapi）
         try {
             val url  = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"
+            Log.d(TAG, "fetchAllCodes: TPEX request start")
             val body = get(url)
-            if (body != null) {
+            if (body == null) {
+                Log.w(TAG, "fetchAllCodes: TPEX body null (network error?)")
+            } else {
                 val arr = json.parseToJsonElement(body).jsonArray
                 arr.forEach { item ->
                     val obj  = item.jsonObject
@@ -299,9 +348,13 @@ class TwseApiService(private val cacheDir: File? = null) {
                     val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
                     if (code.matches(Regex("\\d{4}"))) result[code] = name
                 }
+                Log.d(TAG, "fetchAllCodes: TPEX OK, otc=${result.size - twseCount}, total=${result.size}")
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchAllCodes: TPEX exception: $e")
+        }
 
+        if (result.isEmpty()) Log.e(TAG, "fetchAllCodes: BOTH sources failed, returning empty map")
         result
     }
 
@@ -311,8 +364,15 @@ class TwseApiService(private val cacheDir: File? = null) {
         val req = Request.Builder().url(url)
             .header("User-Agent", "Mozilla/5.0")
             .build()
-        client.newCall(req).execute().use { it.body?.string() }
-    } catch (_: Exception) { null }
+        val resp = client.newCall(req).execute()
+        val code = resp.code
+        val body = resp.use { it.body?.string() }
+        if (code != 200) Log.w(TAG, "HTTP $code for $url")
+        body
+    } catch (e: Exception) {
+        Log.w(TAG, "get() failed url=$url err=$e")
+        null
+    }
 
     /** 清除千分位逗號與停牌標記 X，回傳 Double */
     private fun cleanNum(s: String): Double =

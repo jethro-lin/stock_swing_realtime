@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.datastore.preferences.core.edit
@@ -26,6 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger
 private val Context.dataStore by preferencesDataStore("settings")
 
 private val SELECTED_PRESETS_KEY = stringPreferencesKey("selected_presets_v2")
+
+private const val TAG = "StockApp"
 
 class StockViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -98,7 +101,9 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
 
             // 1. 取得全市場代號 + 公司名稱
             _loadingMsg.value = "取得上市/上櫃股票清單…"
+            Log.i(TAG, "scan: step1 fetchAllCodesWithNames")
             val codeNames = twseApi.fetchAllCodesWithNames()
+            Log.i(TAG, "scan: step1 done, codeNames.size=${codeNames.size}")
             if (codeNames.isEmpty()) {
                 _error.value      = "無法取得股票清單，請確認網路狀況"
                 _isLoading.value  = false
@@ -120,13 +125,14 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
 
             val fmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd")
 
-            // 盤中（台灣時間 9:00–14:30）排除今日 K 棒；盤後納入今日完整收盤
+            // 盤中（台灣時間 9:00-14:30）排除今日 K 棒；盤後納入今日完整收盤
             val tpe = java.time.ZoneId.of("Asia/Taipei")
             val nowTpe = java.time.ZonedDateTime.now(tpe)
             val todayTpe = nowTpe.toLocalDate()
             val isIntraday = nowTpe.hour in 9..13 ||
                              (nowTpe.hour == 14 && nowTpe.minute < 30)
             val signalCutoff = if (isIntraday) todayTpe else todayTpe.plusDays(1)
+            Log.i(TAG, "scan: step2 kbar download, codes=${allCodes.size}, isIntraday=$isIntraday, signalCutoff=$signalCutoff")
 
             coroutineScope {
                 allCodes.map { code ->
@@ -161,8 +167,14 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                                         updateTime   = today.date.format(fmt),
                                     )
                                     eodMap[code] = EodEntry(base, displayQuote)
+                                } else if (raw.isEmpty()) {
+                                    Log.d(TAG, "kbar[$code] fetch returned 0 bars")
+                                } else {
+                                    Log.d(TAG, "kbar[$code] too short: raw=${raw.size} filtered=${bars.size} (need 22)")
                                 }
-                            } catch (_: Exception) {}
+                            } catch (e: Exception) {
+                                Log.w(TAG, "kbar[$code] exception: $e")
+                            }
                             val done = doneCount.incrementAndGet()
                             _scanProgress.value = done to allCodes.size
                             _loadingMsg.value   = "載入中… ($done/${allCodes.size})"
@@ -171,8 +183,10 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                 }.awaitAll()
             }
             _scanProgress.value = doneCount.get() to allCodes.size
+            Log.i(TAG, "scan: step2 done, eodMap.size=${eodMap.size}/${allCodes.size}")
 
             if (eodMap.isEmpty()) {
+                Log.e(TAG, "scan: eodMap empty - all kbar fetches failed")
                 _error.value      = "無法計算技術指標，請確認網路狀況後重新掃描"
                 _isLoading.value  = false
                 _loadingMsg.value = ""
@@ -182,6 +196,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
             // 3. 計算訊號、按選擇的 preset combo 篩選（純 CPU，不再需要即時行情 API）
             _loadingMsg.value = "計算策略訊號…"
             val presets = selectedPresets.value
+            Log.i(TAG, "scan: step3 checkSignals, presets=${presets.map { it.key }}")
             val results = eodMap.entries.mapNotNull { (code, entry) ->
                 val (base, quote) = entry
                 val sigs = StrategyEngine.checkSignals(
@@ -209,6 +224,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                     .thenByDescending { it.quote.totalVolLots }
             )
 
+            Log.i(TAG, "scan: step3 done, results=${results.size}")
             _scanResults.value  = results
             _lastScanTime.value = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("MM/dd HH:mm"))
