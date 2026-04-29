@@ -25,17 +25,17 @@ class TwseApiService(private val cacheDir: File? = null) {
 
     // ── K 棒磁碟快取 ─────────────────────────────────────────────────
 
-    /** 快取目錄：{cacheDir}/kbar/{today}/ */
-    private fun kbarCacheDir(): File? {
+    /** 快取檔案：{cacheDir}/kbar/{code}.csv（跨日保留，補檔更新）*/
+    private fun kbarCacheFile(code: String): File? {
         val base = cacheDir ?: return null
-        return File(base, "kbar/${LocalDate.now()}").also { it.mkdirs() }
+        return File(base, "kbar/$code.csv").also { it.parentFile?.mkdirs() }
     }
 
-    private fun loadCache(code: String): List<HistoricalBar>? {
-        val dir = kbarCacheDir() ?: return null
-        val file = File(dir, "$code.csv")
+    /** 讀取快取檔原始資料，不做新鮮度檢查（供補檔合併用）*/
+    private fun readCacheRaw(code: String): List<HistoricalBar>? {
+        val file = kbarCacheFile(code) ?: return null
         if (!file.exists()) return null
-        val bars = try {
+        return try {
             file.readLines().mapNotNull { line ->
                 val p = line.split("|")
                 if (p.size != 6) null
@@ -47,45 +47,71 @@ class TwseApiService(private val cacheDir: File? = null) {
                     close      = p[4].toDouble(),
                     volumeLots = p[5].toLong(),
                 )
-            }.ifEmpty { return null }
-        } catch (_: Exception) { return null }
+            }.ifEmpty { null }
+        } catch (_: Exception) { null }
+    }
 
-        // 盤後（台灣時間 14:30 後）若快取不含今日 K 棒，強制重新下載
+    /**
+     * 讀取快取並檢查新鮮度。
+     * 盤後（台灣時間 ≥14:30）若不含今日 K 棒且檔案今日尚未更新，回傳 null 觸發補檔。
+     * 若檔案今日已更新（假日/休市），則接受快取避免無限重試。
+     */
+    private fun loadCache(code: String): List<HistoricalBar>? {
+        val file = kbarCacheFile(code) ?: return null
+        if (!file.exists()) return null
+        val bars = readCacheRaw(code) ?: return null
+
         val nowTpe = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Taipei"))
         val isAfterClose = nowTpe.hour > 14 || (nowTpe.hour == 14 && nowTpe.minute >= 30)
         if (isAfterClose) {
             val today = nowTpe.toLocalDate()
-            if (bars.none { it.date == today }) return null
+            if (bars.none { it.date == today }) {
+                val fileDate = java.time.Instant.ofEpochMilli(file.lastModified())
+                    .atZone(java.time.ZoneId.of("Asia/Taipei")).toLocalDate()
+                if (fileDate < today) return null  // 昨日快取，需補今日
+            }
         }
         return bars
     }
 
     private fun saveCache(code: String, bars: List<HistoricalBar>) {
-        val dir = kbarCacheDir() ?: return
+        val file = kbarCacheFile(code) ?: return
         try {
-            File(dir, "$code.csv").writeText(
-                bars.joinToString("\n") { b ->
-                    "${b.date}|${b.open}|${b.high}|${b.low}|${b.close}|${b.volumeLots}"
-                }
-            )
+            file.writeText(bars.joinToString("\n") { b ->
+                "${b.date}|${b.open}|${b.high}|${b.low}|${b.close}|${b.volumeLots}"
+            })
         } catch (_: Exception) {}
     }
 
     // ── 歷史日K ──────────────────────────────────────────────────────
 
     /**
-     * 抓最近 [months] 個月的日K。快取命中則直接回傳，否則從 TWSE/TPEX 下載並寫入快取。
+     * 取得日K，優先使用磁碟快取，只補抓缺少的月份。
+     * - 快取新鮮 → 直接回傳
+     * - 快取存在但過期 → 從最後一筆的當月開始補抓，合併後存檔
+     * - 無快取 → 全量下載 [months] 個月
      * 先試 TWSE（上市），若無資料改試 TPEX（上櫃）。
-     * 回傳以日期升冪排序、去重的 bar list。
      */
     suspend fun fetchHistorical(code: String, months: Int = 6): List<HistoricalBar> =
         withContext(Dispatchers.IO) {
+            // 快取新鮮 → 直接回傳，不需要任何 HTTP 請求
             loadCache(code)?.let { return@withContext it }
 
             val today = LocalDate.now()
-            val bars  = mutableListOf<HistoricalBar>()
+            // 讀取舊快取作為補檔基底（即使不新鮮也保留歷史資料）
+            val stale = readCacheRaw(code)
 
-            for (m in months downTo 0) {
+            // 決定補抓起始月份：有舊快取從最後一筆當月補；否則全量下載
+            val fetchFrom = if (stale != null) {
+                stale.last().date.withDayOfMonth(1)
+            } else {
+                today.minusMonths(months.toLong())
+            }
+            val monthsToFetch = (today.year - fetchFrom.year) * 12 +
+                                 (today.monthValue - fetchFrom.monthValue)
+
+            val newBars = mutableListOf<HistoricalBar>()
+            for (m in monthsToFetch downTo 0) {
                 val date  = today.minusMonths(m.toLong())
                 val ym    = date.format(DateTimeFormatter.ofPattern("yyyyMM"))
                 val rocY  = date.year - 1911
@@ -93,15 +119,17 @@ class TwseApiService(private val cacheDir: File? = null) {
 
                 val twse = fetchTwseMonth(code, ym)
                 if (twse != null) {
-                    bars += twse
+                    newBars += twse
                 } else {
                     val tpex = fetchTpexMonth(code, rocY, rocMM)
-                    if (tpex != null) bars += tpex
+                    if (tpex != null) newBars += tpex
                 }
                 delay(150)  // 避免觸發 TWSE rate limit
             }
 
-            val result = bars.sortedBy { it.date }.distinctBy { it.date }
+            // 合併舊快取 + 新抓資料，去重排序後存檔（含假日無新資料的情況，仍更新 mtime）
+            val result = ((stale ?: emptyList()) + newBars)
+                .sortedBy { it.date }.distinctBy { it.date }
             if (result.isNotEmpty()) saveCache(code, result)
             result
         }
