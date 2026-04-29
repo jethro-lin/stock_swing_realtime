@@ -64,12 +64,19 @@ fun MainScreen(vm: StockViewModel) {
                         Text(lastScanTime, fontSize = 11.sp, color = Color.Gray,
                             modifier = Modifier.padding(end = 4.dp))
                     }
-                    Button(
-                        onClick  = { vm.scan() },
-                        enabled  = !isLoading,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.padding(end = 8.dp),
-                    ) { Text("掃描") }
+                    if (isLoading) {
+                        OutlinedButton(
+                            onClick        = { vm.stopScan() },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier       = Modifier.padding(end = 8.dp),
+                        ) { Text("停止") }
+                    } else {
+                        Button(
+                            onClick        = { vm.scan() },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier       = Modifier.padding(end = 8.dp),
+                        ) { Text("掃描") }
+                    }
                 }
             )
         }

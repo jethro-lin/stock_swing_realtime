@@ -16,8 +16,12 @@ import com.stockswing.app.engine.StrategyEngine
 import com.stockswing.app.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 private val Context.dataStore by preferencesDataStore("settings")
 
@@ -26,6 +30,10 @@ private val SELECTED_PRESETS_KEY = stringPreferencesKey("selected_presets_v2")
 class StockViewModel(app: Application) : AndroidViewModel(app) {
 
     private val twseApi = TwseApiService()
+
+    companion object {
+        private const val WORKERS = 5  // 並行下載數；避免 TWSE rate-limit
+    }
 
     // ── 持久化：選擇的 Preset ─────────────────────────────────────────
     val selectedPresets: StateFlow<Set<Preset>> = app.dataStore.data
@@ -78,41 +86,51 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun stopScan() { scanJob?.cancel() }
+
     fun scan() {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            _isLoading.value   = true
-            _error.value       = null
+            try {
+            _isLoading.value    = true
+            _error.value        = null
             _scanProgress.value = 0 to 0
 
             // 1. 取得全市場代號
             _loadingMsg.value = "取得上市/上櫃股票清單…"
             val allCodes = twseApi.fetchAllCodes()
             if (allCodes.isEmpty()) {
-                _error.value     = "無法取得股票清單，請確認網路狀況"
-                _isLoading.value = false
+                _error.value      = "無法取得股票清單，請確認網路狀況"
+                _isLoading.value  = false
                 _loadingMsg.value = ""
                 return@launch
             }
 
-            // 2. 逐支下載 2 個月歷史 K 棒，buildBase 會過濾低流動性
-            val bases = mutableMapOf<String, StrategyBase>()
-            var done  = 0
+            // 2. 並行下載（最多 WORKERS 個同時），buildBase 會過濾低流動性
+            val bases     = ConcurrentHashMap<String, StrategyBase>()
+            val doneCount = AtomicInteger(0)
+            val semaphore = Semaphore(WORKERS)
             _scanProgress.value = 0 to allCodes.size
 
-            for (code in allCodes) {
-                ensureActive()
-                _loadingMsg.value   = "載入 $code (${done + 1}/${allCodes.size})"
-                _scanProgress.value = done to allCodes.size
-                try {
-                    val bars = twseApi.fetchHistorical(code, months = 2)
-                    if (bars.size >= 20) {
-                        StrategyEngine.buildBase(bars)?.let { bases[code] = it }
+            coroutineScope {
+                allCodes.map { code ->
+                    async {
+                        semaphore.withPermit {
+                            ensureActive()
+                            try {
+                                val bars = twseApi.fetchHistorical(code, months = 2)
+                                if (bars.size >= 20) {
+                                    StrategyEngine.buildBase(bars)?.let { bases[code] = it }
+                                }
+                            } catch (_: Exception) {}
+                            val done = doneCount.incrementAndGet()
+                            _scanProgress.value = done to allCodes.size
+                            _loadingMsg.value   = "載入中… ($done/${allCodes.size})"
+                        }
                     }
-                } catch (_: Exception) {}
-                done++
+                }.awaitAll()
             }
-            _scanProgress.value = done to allCodes.size
+            _scanProgress.value = doneCount.get() to allCodes.size
 
             if (bases.isEmpty()) {
                 _error.value     = "無法計算技術指標，請確認網路狀況後重新掃描"
@@ -167,6 +185,10 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                     title = "選股完成：找到 ${results.size} 支",
                     body  = presets.joinToString(" + ") { it.label },
                 )
+            }
+            } finally {
+                _isLoading.value  = false
+                _loadingMsg.value = ""
             }
         }
     }
