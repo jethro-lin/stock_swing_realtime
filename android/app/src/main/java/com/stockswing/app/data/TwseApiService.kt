@@ -35,7 +35,7 @@ class TwseApiService(private val cacheDir: File? = null) {
         val dir = kbarCacheDir() ?: return null
         val file = File(dir, "$code.csv")
         if (!file.exists()) return null
-        return try {
+        val bars = try {
             file.readLines().mapNotNull { line ->
                 val p = line.split("|")
                 if (p.size != 6) null
@@ -47,8 +47,17 @@ class TwseApiService(private val cacheDir: File? = null) {
                     close      = p[4].toDouble(),
                     volumeLots = p[5].toLong(),
                 )
-            }.ifEmpty { null }
-        } catch (_: Exception) { null }
+            }.ifEmpty { return null }
+        } catch (_: Exception) { return null }
+
+        // 盤後（台灣時間 14:30 後）若快取不含今日 K 棒，強制重新下載
+        val nowTpe = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Taipei"))
+        val isAfterClose = nowTpe.hour > 14 || (nowTpe.hour == 14 && nowTpe.minute >= 30)
+        if (isAfterClose) {
+            val today = nowTpe.toLocalDate()
+            if (bars.none { it.date == today }) return null
+        }
+        return bars
     }
 
     private fun saveCache(code: String, bars: List<HistoricalBar>) {

@@ -120,6 +120,14 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
 
             val fmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd")
 
+            // 盤中（台灣時間 9:00–14:30）排除今日 K 棒；盤後納入今日完整收盤
+            val tpe = java.time.ZoneId.of("Asia/Taipei")
+            val nowTpe = java.time.ZonedDateTime.now(tpe)
+            val todayTpe = nowTpe.toLocalDate()
+            val isIntraday = nowTpe.hour in 9..13 ||
+                             (nowTpe.hour == 14 && nowTpe.minute < 30)
+            val signalCutoff = if (isIntraday) todayTpe else todayTpe.plusDays(1)
+
             coroutineScope {
                 allCodes.map { code ->
                     async {
@@ -127,8 +135,8 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                             ensureActive()
                             try {
                                 val raw = twseApi.fetchHistorical(code, months = 2)
-                                // 排除今日未完成 K 棒（盤中 API 可能已回傳今日不完整資料）
-                                val bars = raw.filter { it.date < java.time.LocalDate.now() }
+                                // 盤中（9:00-14:30 台灣時間）排除今日不完整 K 棒；14:30 後納入今日收盤
+                                val bars = raw.filter { it.date < signalCutoff }
                                 // 需至少 22 根：20 根建基準 + 1 根前日 + 1 根訊號日
                                 // bars[-1]=訊號日, bars[-2]=昨日；傳入全部讓 buildBase 對齊 Python win[-1]=today
                                 if (bars.size >= 22) {
