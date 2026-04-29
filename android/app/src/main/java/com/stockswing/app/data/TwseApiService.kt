@@ -53,7 +53,7 @@ class TwseApiService(private val cacheDir: File? = null) {
             if (!dest.exists()) {
                 try {
                     src.copyTo(dest)
-                    dest.setLastModified(src.lastModified())  // 保留原始 mtime 讓新鮮度判斷正確
+                    dest.setLastModified(0L)  // mtime=epoch → loadCache 視為過期，觸發補今日資料
                     migrated++
                 } catch (e: Exception) {
                     Log.w(TAG, "migration failed ${src.name}: $e")

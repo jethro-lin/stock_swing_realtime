@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private val Context.dataStore by preferencesDataStore("settings")
 
-private val SELECTED_PRESETS_KEY = stringPreferencesKey("selected_presets_v2")
+private val SELECTED_PRESETS_KEY = stringPreferencesKey("selected_presets_v3")  // v3: default = all presets
 
 private const val TAG = "StockApp"
 
@@ -39,16 +39,18 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ── 持久化：選擇的 Preset ─────────────────────────────────────────
+    private val DEFAULT_PRESETS = Preset.entries.toSet()  // 預設全開，對齊 Python 輸出
+
     val selectedPresets: StateFlow<Set<Preset>> = app.dataStore.data
         .map { prefs ->
             val saved = prefs[SELECTED_PRESETS_KEY] ?: ""
-            if (saved.isBlank()) setOf(Preset.LONG3_LEAN)
+            if (saved.isBlank()) DEFAULT_PRESETS
             else saved.split(",")
                 .mapNotNull { k -> Preset.entries.find { it.key == k } }
                 .toSet()
-                .ifEmpty { setOf(Preset.LONG3_LEAN) }
+                .ifEmpty { DEFAULT_PRESETS }
         }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, setOf(Preset.LONG3_LEAN))
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_PRESETS)
 
     // ── UI 狀態 ───────────────────────────────────────────────────────
     private val _isLoading   = MutableStateFlow(false)
