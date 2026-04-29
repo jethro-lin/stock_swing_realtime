@@ -119,7 +119,7 @@ class TwseApiService(private val cacheDir: File? = null) {
                             high        = cleanNum(r[4].jsonPrimitive.content),
                             low         = cleanNum(r[5].jsonPrimitive.content),
                             close       = cleanNum(r[6].jsonPrimitive.content),
-                            volumeLots  = cleanNum(r[1].jsonPrimitive.content).toLong(),
+                            volumeLots  = (cleanNum(r[1].jsonPrimitive.content) / 1000).toLong(),
                         )
                     } catch (_: Exception) { null }
                 }
@@ -150,7 +150,7 @@ class TwseApiService(private val cacheDir: File? = null) {
                             high        = cleanNum(r[5].jsonPrimitive.content),
                             low         = cleanNum(r[6].jsonPrimitive.content),
                             close       = cleanNum(r[7].jsonPrimitive.content),
-                            volumeLots  = cleanNum(r[1].jsonPrimitive.content).toLong(),
+                            volumeLots  = (cleanNum(r[1].jsonPrimitive.content) / 1000).toLong(),
                         )
                     } catch (_: Exception) { null }
                 }
