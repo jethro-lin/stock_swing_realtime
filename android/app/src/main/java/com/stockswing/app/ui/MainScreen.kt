@@ -129,6 +129,8 @@ fun MainScreen(vm: StockViewModel) {
     val results             by vm.scanResults.collectAsState()
     val lastScanTime        by vm.lastScanTime.collectAsState()
     val signalDate          by vm.signalDate.collectAsState()
+    val chartTarget         by vm.chartTarget.collectAsState()
+    val chartBars           by vm.chartBars.collectAsState()
 
     var selectedTab         by remember { mutableIntStateOf(0) }
     val groups               = PriceGroup.entries
@@ -292,12 +294,21 @@ fun MainScreen(vm: StockViewModel) {
                 HorizontalDivider()
                 LazyColumn {
                     items(tabItems, key = { it.code }) { result ->
-                        StockRow(result)
+                        StockRow(result, onTap = { vm.openChart(result) })
                         HorizontalDivider(color = Color(0xFFEEEEEE))
                     }
                 }
             }
         }
+    }
+
+    // ── 日K圖表 Sheet ────────────────────────────────────────────
+    if (chartTarget != null) {
+        KBarChartSheet(
+            result    = chartTarget!!,
+            bars      = chartBars,
+            onDismiss = { vm.closeChart() },
+        )
     }
 
     // ── 掃描設定 Dialog ───────────────────────────────────────────
@@ -550,7 +561,7 @@ private fun StockListHeader() {
 // ── 個股行 ────────────────────────────────────────────────────────
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StockRow(result: SignalResult) {
+private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
     val quote      = result.quote
     val customHits = result.hitPresets["custom"]
 
@@ -577,7 +588,7 @@ private fun StockRow(result: SignalResult) {
         Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick      = {},
+                onClick      = onTap,
                 onLongClick  = {
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("stock_code", result.code))

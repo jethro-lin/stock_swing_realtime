@@ -67,13 +67,17 @@ struct MainView: View {
                     listHeader
                     Divider()
                     List(tabItems) { result in
-                        StockRowView(result: result)
+                        StockRowView(result: result, onTap: { vm.openChart(result) })
                             .listRowInsets(EdgeInsets())
                             .listRowSeparatorTint(Color(white: 0.93))
                     }
                     .listStyle(.plain)
                 }
             }
+        }
+        .sheet(item: $vm.chartTarget) { result in
+            KBarChartSheet(result: result)
+                .environmentObject(vm)
         }
         .sheet(isPresented: $showScanSheet) {
             ScanDialogView(

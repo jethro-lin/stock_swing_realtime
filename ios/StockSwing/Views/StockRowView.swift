@@ -6,6 +6,7 @@ private let grayDot     = Color(white: 0.741)
 
 struct StockRowView: View {
     let result: SignalResult
+    var onTap: (() -> Void)? = nil
     @State private var copied = false
 
     private var customHits: [String]? { result.hitPresets["custom"] }
@@ -73,6 +74,7 @@ struct StockRowView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
         .onLongPressGesture {
             UIPasteboard.general.string = result.code
             copied = true

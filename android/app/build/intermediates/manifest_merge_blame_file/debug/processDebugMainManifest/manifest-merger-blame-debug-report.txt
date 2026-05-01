@@ -118,387 +118,386 @@
 67-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:9:9-41
 68        android:supportsRtl="true"
 68-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:11:9-35
-69        android:testOnly="true"
-70        android:theme="@style/Theme.StockSwing" >
-70-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:10:9-48
-71        <meta-data
-71-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:13:9-15:70
-72            android:name="com.google.android.gms.ads.APPLICATION_ID"
-72-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:14:13-69
-73            android:value="ca-app-pub-6931612619540388~4897192351" />
-73-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:15:13-67
-74
-75        <activity
-75-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:17:9-25:20
-76            android:name="com.stockswing.app.MainActivity"
-76-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:18:13-41
-77            android:exported="true"
-77-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:19:13-36
-78            android:windowSoftInputMode="adjustResize" >
-78-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:20:13-55
-79            <intent-filter>
-79-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:21:13-24:29
-80                <action android:name="android.intent.action.MAIN" />
-80-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:22:17-69
-80-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:22:25-66
-81
-82                <category android:name="android.intent.category.LAUNCHER" />
-82-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:23:17-77
-82-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:23:27-74
-83            </intent-filter>
-84        </activity>
-85
-86        <!-- Include the AdActivity and InAppPurchaseActivity configChanges and themes. -->
-87        <activity
-87-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:73:9-78:43
-88            android:name="com.google.android.gms.ads.AdActivity"
-88-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:74:13-65
-89            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
-89-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:75:13-122
-90            android:exported="false"
-90-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:76:13-37
-91            android:theme="@android:style/Theme.Translucent" />
-91-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:77:13-61
-92
-93        <provider
-93-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:80:9-85:43
-94            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
-94-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:81:13-76
-95            android:authorities="com.stockswing.app.mobileadsinitprovider"
-95-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:82:13-73
-96            android:exported="false"
-96-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:83:13-37
-97            android:initOrder="100" />
-97-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:84:13-36
-98
-99        <service
-99-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:87:9-91:43
-100            android:name="com.google.android.gms.ads.AdService"
-100-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:88:13-64
-101            android:enabled="true"
-101-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:89:13-35
-102            android:exported="false" />
-102-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:90:13-37
-103
-104        <activity
-104-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:93:9-97:43
-105            android:name="com.google.android.gms.ads.OutOfContextTestingActivity"
-105-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:94:13-82
-106            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
-106-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:95:13-122
-107            android:exported="false" />
-107-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:96:13-37
-108        <activity
-108-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:98:9-105:43
-109            android:name="com.google.android.gms.ads.NotificationHandlerActivity"
-109-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:99:13-82
-110            android:excludeFromRecents="true"
-110-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:100:13-46
-111            android:exported="false"
-111-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:101:13-37
-112            android:launchMode="singleTask"
-112-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:102:13-44
-113            android:taskAffinity=""
-113-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:103:13-36
-114            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-114-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:104:13-72
-115
-116        <property
-116-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:107:9-109:62
-117            android:name="android.adservices.AD_SERVICES_CONFIG"
-117-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:108:13-65
-118            android:resource="@xml/gma_ad_services_config" />
-118-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:109:13-59
-119
-120        <activity
-120-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:20:9-22:45
-121            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-121-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:20:19-85
-122            android:exported="false"
-122-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:22:19-43
-123            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-123-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:21:19-78
-124
-125        <meta-data
-125-->[com.google.android.gms:play-services-basement:18.4.0] /Users/optoma/.gradle/caches/8.10.2/transforms/bed265e0244636a3a665148d51405dd8/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
-126            android:name="com.google.android.gms.version"
-126-->[com.google.android.gms:play-services-basement:18.4.0] /Users/optoma/.gradle/caches/8.10.2/transforms/bed265e0244636a3a665148d51405dd8/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
-127            android:value="@integer/google_play_services_version" />
-127-->[com.google.android.gms:play-services-basement:18.4.0] /Users/optoma/.gradle/caches/8.10.2/transforms/bed265e0244636a3a665148d51405dd8/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
-128
-129        <activity
-129-->[androidx.compose.ui:ui-tooling-android:1.7.6] /Users/optoma/.gradle/caches/8.10.2/transforms/f4ec8059b203e28b9c6791f88e608f6e/transformed/jetified-ui-tooling-release/AndroidManifest.xml:23:9-25:39
-130            android:name="androidx.compose.ui.tooling.PreviewActivity"
-130-->[androidx.compose.ui:ui-tooling-android:1.7.6] /Users/optoma/.gradle/caches/8.10.2/transforms/f4ec8059b203e28b9c6791f88e608f6e/transformed/jetified-ui-tooling-release/AndroidManifest.xml:24:13-71
-131            android:exported="true" />
-131-->[androidx.compose.ui:ui-tooling-android:1.7.6] /Users/optoma/.gradle/caches/8.10.2/transforms/f4ec8059b203e28b9c6791f88e608f6e/transformed/jetified-ui-tooling-release/AndroidManifest.xml:25:13-36
-132
-133        <uses-library
-133-->[androidx.privacysandbox.ads:ads-adservices:1.0.0-beta05] /Users/optoma/.gradle/caches/8.10.2/transforms/9f95956a3c5db7a1d20297130bbf28e7/transformed/jetified-ads-adservices-1.0.0-beta05/AndroidManifest.xml:23:9-25:40
-134            android:name="android.ext.adservices"
-134-->[androidx.privacysandbox.ads:ads-adservices:1.0.0-beta05] /Users/optoma/.gradle/caches/8.10.2/transforms/9f95956a3c5db7a1d20297130bbf28e7/transformed/jetified-ads-adservices-1.0.0-beta05/AndroidManifest.xml:24:13-50
-135            android:required="false" />
-135-->[androidx.privacysandbox.ads:ads-adservices:1.0.0-beta05] /Users/optoma/.gradle/caches/8.10.2/transforms/9f95956a3c5db7a1d20297130bbf28e7/transformed/jetified-ads-adservices-1.0.0-beta05/AndroidManifest.xml:25:13-37
-136
-137        <provider
-137-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:31:9-39:20
-138            android:name="androidx.startup.InitializationProvider"
-138-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:32:13-67
-139            android:authorities="com.stockswing.app.androidx-startup"
-139-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:33:13-68
-140            android:exported="false" >
-140-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:34:13-37
-141            <meta-data
-141-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:36:13-38:52
-142                android:name="androidx.work.WorkManagerInitializer"
-142-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:37:17-68
-143                android:value="androidx.startup" />
-143-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:38:17-49
-144            <meta-data
-144-->[androidx.emoji2:emoji2:1.3.0] /Users/optoma/.gradle/caches/8.10.2/transforms/fedff8dfb1159d39323fb4069d598979/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
-145                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-145-->[androidx.emoji2:emoji2:1.3.0] /Users/optoma/.gradle/caches/8.10.2/transforms/fedff8dfb1159d39323fb4069d598979/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
-146                android:value="androidx.startup" />
-146-->[androidx.emoji2:emoji2:1.3.0] /Users/optoma/.gradle/caches/8.10.2/transforms/fedff8dfb1159d39323fb4069d598979/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
-147            <meta-data
-147-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/optoma/.gradle/caches/8.10.2/transforms/3c22e2ac4af48d6e13a4cddbe28c2a69/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
-148                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-148-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/optoma/.gradle/caches/8.10.2/transforms/3c22e2ac4af48d6e13a4cddbe28c2a69/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
-149                android:value="androidx.startup" />
-149-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/optoma/.gradle/caches/8.10.2/transforms/3c22e2ac4af48d6e13a4cddbe28c2a69/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
-150            <meta-data
-150-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
-151                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-151-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
-152                android:value="androidx.startup" />
-152-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
-153        </provider>
-154
-155        <service
-155-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:41:9-46:35
-156            android:name="androidx.work.impl.background.systemalarm.SystemAlarmService"
-156-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:42:13-88
-157            android:directBootAware="false"
-157-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:43:13-44
-158            android:enabled="@bool/enable_system_alarm_service_default"
-158-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:44:13-72
-159            android:exported="false" />
-159-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:45:13-37
-160        <service
-160-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:47:9-53:35
-161            android:name="androidx.work.impl.background.systemjob.SystemJobService"
-161-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:48:13-84
-162            android:directBootAware="false"
-162-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:49:13-44
-163            android:enabled="@bool/enable_system_job_service_default"
-163-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:50:13-70
-164            android:exported="true"
-164-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:51:13-36
-165            android:permission="android.permission.BIND_JOB_SERVICE" />
-165-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:52:13-69
-166        <service
-166-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:54:9-59:35
-167            android:name="androidx.work.impl.foreground.SystemForegroundService"
-167-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:55:13-81
-168            android:directBootAware="false"
-168-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:56:13-44
-169            android:enabled="@bool/enable_system_foreground_service_default"
-169-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:57:13-77
-170            android:exported="false" />
-170-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:58:13-37
-171
-172        <receiver
-172-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:61:9-66:35
-173            android:name="androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver"
-173-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:62:13-88
-174            android:directBootAware="false"
-174-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:63:13-44
-175            android:enabled="true"
-175-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:64:13-35
-176            android:exported="false" />
-176-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:65:13-37
-177        <receiver
-177-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:67:9-77:20
-178            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryChargingProxy"
-178-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:68:13-106
-179            android:directBootAware="false"
-179-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:69:13-44
-180            android:enabled="false"
-180-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:70:13-36
-181            android:exported="false" >
-181-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:71:13-37
-182            <intent-filter>
-182-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:73:13-76:29
-183                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-183-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:74:17-87
-183-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:74:25-84
-184                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-184-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:75:17-90
-184-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:75:25-87
-185            </intent-filter>
-186        </receiver>
-187        <receiver
-187-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:78:9-88:20
-188            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryNotLowProxy"
-188-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:79:13-104
-189            android:directBootAware="false"
-189-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:80:13-44
-190            android:enabled="false"
-190-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:81:13-36
-191            android:exported="false" >
-191-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:82:13-37
-192            <intent-filter>
-192-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:84:13-87:29
-193                <action android:name="android.intent.action.BATTERY_OKAY" />
-193-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:85:17-77
-193-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:85:25-74
-194                <action android:name="android.intent.action.BATTERY_LOW" />
-194-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:86:17-76
-194-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:86:25-73
-195            </intent-filter>
-196        </receiver>
-197        <receiver
-197-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:89:9-99:20
-198            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$StorageNotLowProxy"
-198-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:90:13-104
-199            android:directBootAware="false"
-199-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:91:13-44
-200            android:enabled="false"
-200-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:92:13-36
-201            android:exported="false" >
-201-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:93:13-37
-202            <intent-filter>
-202-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:95:13-98:29
-203                <action android:name="android.intent.action.DEVICE_STORAGE_LOW" />
-203-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:96:17-83
-203-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:96:25-80
-204                <action android:name="android.intent.action.DEVICE_STORAGE_OK" />
-204-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:97:17-82
-204-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:97:25-79
-205            </intent-filter>
-206        </receiver>
-207        <receiver
-207-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:100:9-109:20
-208            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$NetworkStateProxy"
-208-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:101:13-103
-209            android:directBootAware="false"
-209-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:102:13-44
-210            android:enabled="false"
-210-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:103:13-36
-211            android:exported="false" >
-211-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:104:13-37
-212            <intent-filter>
-212-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:106:13-108:29
-213                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
-213-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:107:17-79
-213-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:107:25-76
-214            </intent-filter>
-215        </receiver>
-216        <receiver
-216-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:110:9-121:20
-217            android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver"
-217-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:111:13-88
-218            android:directBootAware="false"
-218-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:112:13-44
-219            android:enabled="false"
-219-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:113:13-36
-220            android:exported="false" >
-220-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:114:13-37
-221            <intent-filter>
-221-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:116:13-120:29
-222                <action android:name="android.intent.action.BOOT_COMPLETED" />
-222-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:117:17-79
-222-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:117:25-76
-223                <action android:name="android.intent.action.TIME_SET" />
-223-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:118:17-73
-223-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:118:25-70
-224                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
-224-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:119:17-81
-224-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:119:25-78
-225            </intent-filter>
-226        </receiver>
-227        <receiver
-227-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:122:9-131:20
-228            android:name="androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver"
-228-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:123:13-99
-229            android:directBootAware="false"
-229-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:124:13-44
-230            android:enabled="@bool/enable_system_alarm_service_default"
-230-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:125:13-72
-231            android:exported="false" >
-231-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:126:13-37
-232            <intent-filter>
-232-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:128:13-130:29
-233                <action android:name="androidx.work.impl.background.systemalarm.UpdateProxies" />
-233-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:129:17-98
-233-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:129:25-95
-234            </intent-filter>
-235        </receiver>
-236        <receiver
-236-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:132:9-142:20
-237            android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
-237-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:133:13-78
-238            android:directBootAware="false"
-238-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:134:13-44
-239            android:enabled="true"
-239-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:135:13-35
-240            android:exported="true"
-240-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:136:13-36
-241            android:permission="android.permission.DUMP" >
-241-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:137:13-57
-242            <intent-filter>
-242-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:139:13-141:29
-243                <action android:name="androidx.work.diagnostics.REQUEST_DIAGNOSTICS" />
-243-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:140:17-88
-243-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:140:25-85
-244            </intent-filter>
-245        </receiver>
-246        <receiver
-246-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
-247            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-247-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
-248            android:directBootAware="false"
-248-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
-249            android:enabled="true"
-249-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
-250            android:exported="true"
-250-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
-251            android:permission="android.permission.DUMP" >
-251-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
-252            <intent-filter>
-252-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
-253                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-253-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
-253-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
-254            </intent-filter>
-255            <intent-filter>
-255-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
-256                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-256-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
-256-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
-257            </intent-filter>
-258            <intent-filter>
-258-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
-259                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-259-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
-259-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
-260            </intent-filter>
-261            <intent-filter>
-261-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
-262                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-262-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
-262-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
-263            </intent-filter>
-264        </receiver>
-265
-266        <service
-266-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:25:9-28:40
-267            android:name="androidx.room.MultiInstanceInvalidationService"
-267-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:26:13-74
-268            android:directBootAware="true"
-268-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:27:13-43
-269            android:exported="false" />
-269-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:28:13-37
-270    </application>
-271
-272</manifest>
+69        android:theme="@style/Theme.StockSwing" >
+69-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:10:9-48
+70        <meta-data
+70-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:13:9-15:70
+71            android:name="com.google.android.gms.ads.APPLICATION_ID"
+71-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:14:13-69
+72            android:value="ca-app-pub-6931612619540388~4897192351" />
+72-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:15:13-67
+73
+74        <activity
+74-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:17:9-25:20
+75            android:name="com.stockswing.app.MainActivity"
+75-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:18:13-41
+76            android:exported="true"
+76-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:19:13-36
+77            android:windowSoftInputMode="adjustResize" >
+77-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:20:13-55
+78            <intent-filter>
+78-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:21:13-24:29
+79                <action android:name="android.intent.action.MAIN" />
+79-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:22:17-69
+79-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:22:25-66
+80
+81                <category android:name="android.intent.category.LAUNCHER" />
+81-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:23:17-77
+81-->/Users/optoma/source/stock_swing_realtime/android/app/src/main/AndroidManifest.xml:23:27-74
+82            </intent-filter>
+83        </activity>
+84
+85        <!-- Include the AdActivity and InAppPurchaseActivity configChanges and themes. -->
+86        <activity
+86-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:73:9-78:43
+87            android:name="com.google.android.gms.ads.AdActivity"
+87-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:74:13-65
+88            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
+88-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:75:13-122
+89            android:exported="false"
+89-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:76:13-37
+90            android:theme="@android:style/Theme.Translucent" />
+90-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:77:13-61
+91
+92        <provider
+92-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:80:9-85:43
+93            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
+93-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:81:13-76
+94            android:authorities="com.stockswing.app.mobileadsinitprovider"
+94-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:82:13-73
+95            android:exported="false"
+95-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:83:13-37
+96            android:initOrder="100" />
+96-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:84:13-36
+97
+98        <service
+98-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:87:9-91:43
+99            android:name="com.google.android.gms.ads.AdService"
+99-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:88:13-64
+100            android:enabled="true"
+100-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:89:13-35
+101            android:exported="false" />
+101-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:90:13-37
+102
+103        <activity
+103-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:93:9-97:43
+104            android:name="com.google.android.gms.ads.OutOfContextTestingActivity"
+104-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:94:13-82
+105            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
+105-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:95:13-122
+106            android:exported="false" />
+106-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:96:13-37
+107        <activity
+107-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:98:9-105:43
+108            android:name="com.google.android.gms.ads.NotificationHandlerActivity"
+108-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:99:13-82
+109            android:excludeFromRecents="true"
+109-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:100:13-46
+110            android:exported="false"
+110-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:101:13-37
+111            android:launchMode="singleTask"
+111-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:102:13-44
+112            android:taskAffinity=""
+112-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:103:13-36
+113            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+113-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:104:13-72
+114
+115        <property
+115-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:107:9-109:62
+116            android:name="android.adservices.AD_SERVICES_CONFIG"
+116-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:108:13-65
+117            android:resource="@xml/gma_ad_services_config" />
+117-->[com.google.android.gms:play-services-ads-lite:23.6.0] /Users/optoma/.gradle/caches/8.10.2/transforms/b6e7822a4e18b4fa3bed44121f35187d/transformed/jetified-play-services-ads-lite-23.6.0/AndroidManifest.xml:109:13-59
+118
+119        <activity
+119-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:20:9-22:45
+120            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+120-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:20:19-85
+121            android:exported="false"
+121-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:22:19-43
+122            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+122-->[com.google.android.gms:play-services-base:18.0.0] /Users/optoma/.gradle/caches/8.10.2/transforms/450c5a17d32fadd50d5de67558f49d5b/transformed/jetified-play-services-base-18.0.0/AndroidManifest.xml:21:19-78
+123
+124        <meta-data
+124-->[com.google.android.gms:play-services-basement:18.4.0] /Users/optoma/.gradle/caches/8.10.2/transforms/bed265e0244636a3a665148d51405dd8/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
+125            android:name="com.google.android.gms.version"
+125-->[com.google.android.gms:play-services-basement:18.4.0] /Users/optoma/.gradle/caches/8.10.2/transforms/bed265e0244636a3a665148d51405dd8/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
+126            android:value="@integer/google_play_services_version" />
+126-->[com.google.android.gms:play-services-basement:18.4.0] /Users/optoma/.gradle/caches/8.10.2/transforms/bed265e0244636a3a665148d51405dd8/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
+127
+128        <activity
+128-->[androidx.compose.ui:ui-tooling-android:1.7.6] /Users/optoma/.gradle/caches/8.10.2/transforms/f4ec8059b203e28b9c6791f88e608f6e/transformed/jetified-ui-tooling-release/AndroidManifest.xml:23:9-25:39
+129            android:name="androidx.compose.ui.tooling.PreviewActivity"
+129-->[androidx.compose.ui:ui-tooling-android:1.7.6] /Users/optoma/.gradle/caches/8.10.2/transforms/f4ec8059b203e28b9c6791f88e608f6e/transformed/jetified-ui-tooling-release/AndroidManifest.xml:24:13-71
+130            android:exported="true" />
+130-->[androidx.compose.ui:ui-tooling-android:1.7.6] /Users/optoma/.gradle/caches/8.10.2/transforms/f4ec8059b203e28b9c6791f88e608f6e/transformed/jetified-ui-tooling-release/AndroidManifest.xml:25:13-36
+131
+132        <uses-library
+132-->[androidx.privacysandbox.ads:ads-adservices:1.0.0-beta05] /Users/optoma/.gradle/caches/8.10.2/transforms/9f95956a3c5db7a1d20297130bbf28e7/transformed/jetified-ads-adservices-1.0.0-beta05/AndroidManifest.xml:23:9-25:40
+133            android:name="android.ext.adservices"
+133-->[androidx.privacysandbox.ads:ads-adservices:1.0.0-beta05] /Users/optoma/.gradle/caches/8.10.2/transforms/9f95956a3c5db7a1d20297130bbf28e7/transformed/jetified-ads-adservices-1.0.0-beta05/AndroidManifest.xml:24:13-50
+134            android:required="false" />
+134-->[androidx.privacysandbox.ads:ads-adservices:1.0.0-beta05] /Users/optoma/.gradle/caches/8.10.2/transforms/9f95956a3c5db7a1d20297130bbf28e7/transformed/jetified-ads-adservices-1.0.0-beta05/AndroidManifest.xml:25:13-37
+135
+136        <provider
+136-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:31:9-39:20
+137            android:name="androidx.startup.InitializationProvider"
+137-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:32:13-67
+138            android:authorities="com.stockswing.app.androidx-startup"
+138-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:33:13-68
+139            android:exported="false" >
+139-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:34:13-37
+140            <meta-data
+140-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:36:13-38:52
+141                android:name="androidx.work.WorkManagerInitializer"
+141-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:37:17-68
+142                android:value="androidx.startup" />
+142-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:38:17-49
+143            <meta-data
+143-->[androidx.emoji2:emoji2:1.3.0] /Users/optoma/.gradle/caches/8.10.2/transforms/fedff8dfb1159d39323fb4069d598979/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+144                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+144-->[androidx.emoji2:emoji2:1.3.0] /Users/optoma/.gradle/caches/8.10.2/transforms/fedff8dfb1159d39323fb4069d598979/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
+145                android:value="androidx.startup" />
+145-->[androidx.emoji2:emoji2:1.3.0] /Users/optoma/.gradle/caches/8.10.2/transforms/fedff8dfb1159d39323fb4069d598979/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
+146            <meta-data
+146-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/optoma/.gradle/caches/8.10.2/transforms/3c22e2ac4af48d6e13a4cddbe28c2a69/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
+147                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+147-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/optoma/.gradle/caches/8.10.2/transforms/3c22e2ac4af48d6e13a4cddbe28c2a69/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
+148                android:value="androidx.startup" />
+148-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/optoma/.gradle/caches/8.10.2/transforms/3c22e2ac4af48d6e13a4cddbe28c2a69/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
+149            <meta-data
+149-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+150                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+150-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+151                android:value="androidx.startup" />
+151-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+152        </provider>
+153
+154        <service
+154-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:41:9-46:35
+155            android:name="androidx.work.impl.background.systemalarm.SystemAlarmService"
+155-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:42:13-88
+156            android:directBootAware="false"
+156-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:43:13-44
+157            android:enabled="@bool/enable_system_alarm_service_default"
+157-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:44:13-72
+158            android:exported="false" />
+158-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:45:13-37
+159        <service
+159-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:47:9-53:35
+160            android:name="androidx.work.impl.background.systemjob.SystemJobService"
+160-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:48:13-84
+161            android:directBootAware="false"
+161-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:49:13-44
+162            android:enabled="@bool/enable_system_job_service_default"
+162-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:50:13-70
+163            android:exported="true"
+163-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:51:13-36
+164            android:permission="android.permission.BIND_JOB_SERVICE" />
+164-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:52:13-69
+165        <service
+165-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:54:9-59:35
+166            android:name="androidx.work.impl.foreground.SystemForegroundService"
+166-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:55:13-81
+167            android:directBootAware="false"
+167-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:56:13-44
+168            android:enabled="@bool/enable_system_foreground_service_default"
+168-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:57:13-77
+169            android:exported="false" />
+169-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:58:13-37
+170
+171        <receiver
+171-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:61:9-66:35
+172            android:name="androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver"
+172-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:62:13-88
+173            android:directBootAware="false"
+173-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:63:13-44
+174            android:enabled="true"
+174-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:64:13-35
+175            android:exported="false" />
+175-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:65:13-37
+176        <receiver
+176-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:67:9-77:20
+177            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryChargingProxy"
+177-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:68:13-106
+178            android:directBootAware="false"
+178-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:69:13-44
+179            android:enabled="false"
+179-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:70:13-36
+180            android:exported="false" >
+180-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:71:13-37
+181            <intent-filter>
+181-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:73:13-76:29
+182                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+182-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:74:17-87
+182-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:74:25-84
+183                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+183-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:75:17-90
+183-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:75:25-87
+184            </intent-filter>
+185        </receiver>
+186        <receiver
+186-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:78:9-88:20
+187            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryNotLowProxy"
+187-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:79:13-104
+188            android:directBootAware="false"
+188-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:80:13-44
+189            android:enabled="false"
+189-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:81:13-36
+190            android:exported="false" >
+190-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:82:13-37
+191            <intent-filter>
+191-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:84:13-87:29
+192                <action android:name="android.intent.action.BATTERY_OKAY" />
+192-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:85:17-77
+192-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:85:25-74
+193                <action android:name="android.intent.action.BATTERY_LOW" />
+193-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:86:17-76
+193-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:86:25-73
+194            </intent-filter>
+195        </receiver>
+196        <receiver
+196-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:89:9-99:20
+197            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$StorageNotLowProxy"
+197-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:90:13-104
+198            android:directBootAware="false"
+198-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:91:13-44
+199            android:enabled="false"
+199-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:92:13-36
+200            android:exported="false" >
+200-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:93:13-37
+201            <intent-filter>
+201-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:95:13-98:29
+202                <action android:name="android.intent.action.DEVICE_STORAGE_LOW" />
+202-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:96:17-83
+202-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:96:25-80
+203                <action android:name="android.intent.action.DEVICE_STORAGE_OK" />
+203-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:97:17-82
+203-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:97:25-79
+204            </intent-filter>
+205        </receiver>
+206        <receiver
+206-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:100:9-109:20
+207            android:name="androidx.work.impl.background.systemalarm.ConstraintProxy$NetworkStateProxy"
+207-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:101:13-103
+208            android:directBootAware="false"
+208-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:102:13-44
+209            android:enabled="false"
+209-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:103:13-36
+210            android:exported="false" >
+210-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:104:13-37
+211            <intent-filter>
+211-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:106:13-108:29
+212                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+212-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:107:17-79
+212-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:107:25-76
+213            </intent-filter>
+214        </receiver>
+215        <receiver
+215-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:110:9-121:20
+216            android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver"
+216-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:111:13-88
+217            android:directBootAware="false"
+217-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:112:13-44
+218            android:enabled="false"
+218-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:113:13-36
+219            android:exported="false" >
+219-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:114:13-37
+220            <intent-filter>
+220-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:116:13-120:29
+221                <action android:name="android.intent.action.BOOT_COMPLETED" />
+221-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:117:17-79
+221-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:117:25-76
+222                <action android:name="android.intent.action.TIME_SET" />
+222-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:118:17-73
+222-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:118:25-70
+223                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+223-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:119:17-81
+223-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:119:25-78
+224            </intent-filter>
+225        </receiver>
+226        <receiver
+226-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:122:9-131:20
+227            android:name="androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver"
+227-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:123:13-99
+228            android:directBootAware="false"
+228-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:124:13-44
+229            android:enabled="@bool/enable_system_alarm_service_default"
+229-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:125:13-72
+230            android:exported="false" >
+230-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:126:13-37
+231            <intent-filter>
+231-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:128:13-130:29
+232                <action android:name="androidx.work.impl.background.systemalarm.UpdateProxies" />
+232-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:129:17-98
+232-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:129:25-95
+233            </intent-filter>
+234        </receiver>
+235        <receiver
+235-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:132:9-142:20
+236            android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
+236-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:133:13-78
+237            android:directBootAware="false"
+237-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:134:13-44
+238            android:enabled="true"
+238-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:135:13-35
+239            android:exported="true"
+239-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:136:13-36
+240            android:permission="android.permission.DUMP" >
+240-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:137:13-57
+241            <intent-filter>
+241-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:139:13-141:29
+242                <action android:name="androidx.work.diagnostics.REQUEST_DIAGNOSTICS" />
+242-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:140:17-88
+242-->[androidx.work:work-runtime:2.7.0] /Users/optoma/.gradle/caches/8.10.2/transforms/e0883aa7f43e91145393f417bfb1156a/transformed/work-runtime-2.7.0/AndroidManifest.xml:140:25-85
+243            </intent-filter>
+244        </receiver>
+245        <receiver
+245-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+246            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+246-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+247            android:directBootAware="false"
+247-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+248            android:enabled="true"
+248-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+249            android:exported="true"
+249-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+250            android:permission="android.permission.DUMP" >
+250-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+251            <intent-filter>
+251-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+252                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+252-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+252-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+253            </intent-filter>
+254            <intent-filter>
+254-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+255                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+255-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+255-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+256            </intent-filter>
+257            <intent-filter>
+257-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+258                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+258-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+258-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+259            </intent-filter>
+260            <intent-filter>
+260-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+261                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+261-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+261-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/optoma/.gradle/caches/8.10.2/transforms/203e72eb49fa97de3a2e85260f0964cc/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+262            </intent-filter>
+263        </receiver>
+264
+265        <service
+265-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:25:9-28:40
+266            android:name="androidx.room.MultiInstanceInvalidationService"
+266-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:26:13-74
+267            android:directBootAware="true"
+267-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:27:13-43
+268            android:exported="false" />
+268-->[androidx.room:room-runtime:2.2.5] /Users/optoma/.gradle/caches/8.10.2/transforms/5aac121e458a38fa3f7687e962b65e9f/transformed/room-runtime-2.2.5/AndroidManifest.xml:28:13-37
+269    </application>
+270
+271</manifest>

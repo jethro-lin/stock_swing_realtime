@@ -25,6 +25,26 @@ class StockViewModel: ObservableObject {
     @Published var lastScanTime = ""
     @Published var signalDate = ""
 
+    // MARK: - Chart state
+
+    @Published var chartTarget: SignalResult? = nil
+    @Published var chartBars: [HistoricalBar] = []
+
+    func openChart(_ result: SignalResult) {
+        chartTarget = result
+        chartBars   = []
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let bars = await self.api.loadCachedBars(code: result.code) ?? []
+            await MainActor.run { self.chartBars = bars }
+        }
+    }
+
+    func closeChart() {
+        chartTarget = nil
+        chartBars   = []
+    }
+
     private let api = TwseApiService()
     private var scanTask: Task<Void, Never>?
 

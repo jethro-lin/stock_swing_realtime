@@ -24,6 +24,8 @@ actor TwseApiService {
         kbarDir.appendingPathComponent("\(code).csv")
     }
 
+    func loadCachedBars(code: String) -> [HistoricalBar]? { readCacheRaw(code: code) }
+
     private func readCacheRaw(code: String) -> [HistoricalBar]? {
         let file = cacheFile(code: code)
         guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }

@@ -101,6 +101,25 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
 
     private var scanJob: Job? = null
 
+    // ── 日K圖表 ───────────────────────────────────────────────────────
+    private val _chartTarget = MutableStateFlow<SignalResult?>(null)
+    val chartTarget: StateFlow<SignalResult?> = _chartTarget
+
+    private val _chartBars   = MutableStateFlow<List<HistoricalBar>>(emptyList())
+    val chartBars: StateFlow<List<HistoricalBar>> = _chartBars
+
+    fun openChart(result: SignalResult) {
+        _chartTarget.value = result
+        viewModelScope.launch(Dispatchers.IO) {
+            _chartBars.value = twseApi.loadCachedBars(result.code) ?: emptyList()
+        }
+    }
+
+    fun closeChart() {
+        _chartTarget.value = null
+        _chartBars.value   = emptyList()
+    }
+
     // ── 初始化 ────────────────────────────────────────────────────────
     init {
         setupNotificationChannel()

@@ -100,6 +100,9 @@ class TwseApiService(
         return File(base, "kbar/$code.csv").also { it.parentFile?.mkdirs() }
     }
 
+    /** 直接讀取快取的日K資料（供圖表顯示用） */
+    fun loadCachedBars(code: String): List<HistoricalBar>? = readCacheRaw(code)
+
     /** 讀取快取檔原始資料，不做新鮮度檢查（供補檔合併用）*/
     private fun readCacheRaw(code: String): List<HistoricalBar>? {
         val file = kbarCacheFile(code) ?: return null
