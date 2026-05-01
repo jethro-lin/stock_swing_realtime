@@ -1,5 +1,8 @@
 package com.stockswing.app.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 /** 單支股票的選股結果（即時行情 + 策略訊號 + 命中 preset combo） */
 data class SignalResult(
     val code: String,

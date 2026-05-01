@@ -1,5 +1,8 @@
 package com.stockswing.app.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 /** TWSE MIS API 的即時行情快照 */
 data class RealtimeQuote(
     val code: String,

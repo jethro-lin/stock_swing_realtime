@@ -1,0 +1,26 @@
+<lint-module
+    format="1"
+    dir="/Users/optoma/source/stock_swing_realtime/android/app"
+    name=":app"
+    type="APP"
+    maven="StockSwing:app:unspecified"
+    agpVersion="8.7.3"
+    buildFolder="build"
+    bootClassPath="/Users/optoma/Library/Android/sdk/platforms/android-35/android.jar:/Users/optoma/Library/Android/sdk/build-tools/34.0.0/core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-35"
+    neverShrinking="true">
+  <lintOptions
+      disable="InvalidFragmentVersionForActivityResult"
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true">
+    <severities>
+      <severity
+        id="InvalidFragmentVersionForActivityResult"
+        severity="IGNORE" />
+    </severities>
+  </lintOptions>
+  <variant name="release"/>
+</lint-module>

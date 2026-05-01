@@ -1,5 +1,8 @@
 package com.stockswing.app.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 /** 對應 Python check_signals() 的回傳值，37 個策略旗標 */
 data class StrategySignals(
     val A: Boolean = false,  val AS: Boolean = false,

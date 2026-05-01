@@ -17,7 +17,14 @@ import java.util.concurrent.TimeUnit
 
 private const val TAG = "StockApp"
 
-class TwseApiService(private val cacheDir: File? = null) {
+/**
+ * @param cacheDir        持久快取目錄（app.filesDir），kbar 存這裡，不會被「清除快取」清掉
+ * @param legacyCacheDir  舊快取目錄（app.cacheDir），一次性搬遷用
+ */
+class TwseApiService(
+    private val cacheDir: File? = null,
+    private val legacyCacheDir: File? = null,
+) {
 
     init {
         migrateLegacyCache()
@@ -33,37 +40,58 @@ class TwseApiService(private val cacheDir: File? = null) {
     // ── K 棒磁碟快取 ─────────────────────────────────────────────────
 
     /**
-     * 一次性搬遷：將舊格式 kbar/{date}/{code}.csv 搬到 kbar/{code}.csv。
-     * 只取最新日期目錄，不覆蓋已存在的新格式快取。
+     * 一次性搬遷，按優先順序：
+     * 1. legacyCacheDir/kbar/{code}.csv  → cacheDir/kbar/{code}.csv  （舊 cacheDir 平式快取）
+     * 2. legacyCacheDir/kbar/{date}/CODE.csv → cacheDir/kbar/CODE.csv  （更舊的日期目錄格式）
+     * 3. cacheDir/kbar/{date}/CODE.csv   → cacheDir/kbar/CODE.csv  （同目錄舊格式，向後相容）
+     * 不覆蓋已存在的目標檔案。搬遷後 mtime=0 讓 loadCache 視為過期並補今日資料。
      */
     private fun migrateLegacyCache() {
-        val base = cacheDir ?: return
-        val kbarDir = File(base, "kbar")
-        if (!kbarDir.exists()) return
-
-        val latestDateDir = kbarDir.listFiles()
-            ?.filter { it.isDirectory && it.name.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
-            ?.maxByOrNull { it.name }
-            ?: return
-
+        val dest = cacheDir ?: return
+        val destKbar = File(dest, "kbar").also { it.mkdirs() }
         var migrated = 0
-        latestDateDir.listFiles()?.forEach { src ->
-            if (!src.name.endsWith(".csv")) return@forEach
-            val dest = File(kbarDir, src.name)
-            if (!dest.exists()) {
-                try {
-                    src.copyTo(dest)
-                    dest.setLastModified(0L)  // mtime=epoch → loadCache 視為過期，觸發補今日資料
-                    migrated++
-                } catch (e: Exception) {
-                    Log.w(TAG, "migration failed ${src.name}: $e")
+
+        fun copyFlat(srcKbar: File) {
+            srcKbar.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".csv") }
+                ?.forEach { src ->
+                    val d = File(destKbar, src.name)
+                    if (!d.exists()) {
+                        try { src.copyTo(d); d.setLastModified(0L); migrated++ }
+                        catch (e: Exception) { Log.w(TAG, "migrate flat ${src.name}: $e") }
+                    }
                 }
+        }
+
+        fun copyDateDirs(srcKbar: File) {
+            val latestDir = srcKbar.listFiles()
+                ?.filter { it.isDirectory && it.name.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+                ?.maxByOrNull { it.name } ?: return
+            latestDir.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".csv") }
+                ?.forEach { src ->
+                    val d = File(destKbar, src.name)
+                    if (!d.exists()) {
+                        try { src.copyTo(d); d.setLastModified(0L); migrated++ }
+                        catch (e: Exception) { Log.w(TAG, "migrate dated ${src.name}: $e") }
+                    }
+                }
+        }
+
+        // 1 + 2：從舊 cacheDir 搬過來
+        legacyCacheDir?.let { oldBase ->
+            val oldKbar = File(oldBase, "kbar")
+            if (oldKbar.exists()) {
+                copyFlat(oldKbar)
+                copyDateDirs(oldKbar)
             }
         }
+
+        // 3：cacheDir 內部的舊格式日期目錄
+        copyDateDirs(destKbar)
+
         if (migrated > 0)
-            Log.i(TAG, "migrateLegacyCache: $migrated files from ${latestDateDir.name}")
-        else
-            Log.d(TAG, "migrateLegacyCache: nothing to migrate from ${latestDateDir.name}")
+            Log.i(TAG, "migrateLegacyCache: $migrated files migrated to ${destKbar.path}")
     }
 
     /** 快取檔案：{cacheDir}/kbar/{code}.csv（跨日保留，補檔更新）*/
@@ -110,13 +138,25 @@ class TwseApiService(private val cacheDir: File? = null) {
         if (isAfterClose) {
             val today = nowTpe.toLocalDate()
             if (bars.none { it.date == today }) {
-                val fileDate = java.time.Instant.ofEpochMilli(file.lastModified())
-                    .atZone(java.time.ZoneId.of("Asia/Taipei")).toLocalDate()
+                val fileMtime = file.lastModified()
+                val fileZdt   = java.time.Instant.ofEpochMilli(fileMtime)
+                    .atZone(java.time.ZoneId.of("Asia/Taipei"))
+                val fileDate  = fileZdt.toLocalDate()
                 if (fileDate < today) {
                     Log.d(TAG, "cache[$code] stale: lastBar=${bars.last().date}, fileDate=$fileDate -> refetch")
                     return null
                 }
-                Log.d(TAG, "cache[$code] afterClose no today bar but file updated today (holiday) -> accept ${bars.size} bars")
+                // fileDate == today：看寫入時間是否已在收盤後
+                // 若是盤中寫入（< 14:30），代表當時尚無今日 K 棒，仍需盤後補抓
+                val closeThresholdMs = today
+                    .atTime(14, 30)
+                    .atZone(java.time.ZoneId.of("Asia/Taipei"))
+                    .toInstant().toEpochMilli()
+                if (fileMtime < closeThresholdMs) {
+                    Log.d(TAG, "cache[$code] written today before close -> refetch post-close")
+                    return null
+                }
+                Log.d(TAG, "cache[$code] afterClose no today bar, file written today after-close (holiday) -> accept ${bars.size} bars")
             }
         }
         Log.d(TAG, "cache[$code] hit: ${bars.size} bars, last=${bars.last().date}")
@@ -171,7 +211,10 @@ class TwseApiService(private val cacheDir: File? = null) {
                 val rocY  = date.year - 1911
                 val rocMM = date.monthValue.toString().padStart(2, '0')
 
-                val twse = fetchTwseMonth(code, ym)
+                // 先試 TWSE；空 list（stat=OK 但無資料）也視同 null，改試 TPEX
+                var twse = fetchTwseMonth(code, ym)
+                if (twse != null && twse.isEmpty()) twse = null
+
                 if (twse != null) {
                     Log.d(TAG, "  twse[$code][$ym] -> ${twse.size} bars")
                     newBars += twse
@@ -181,10 +224,12 @@ class TwseApiService(private val cacheDir: File? = null) {
                         Log.d(TAG, "  tpex[$code][$rocY/$rocMM] -> ${tpex.size} bars")
                         newBars += tpex
                     } else {
+                        // TPEX 失敗（rate-limit 或真的沒資料）
+                        // 不做阻塞式 retry；stale cache 若存在本次仍會回傳，下次掃描再補
                         Log.d(TAG, "  both miss[$code][$ym]")
                     }
                 }
-                delay(150)  // 避免觸發 TWSE rate limit
+                delay(400)  // 拉長間距，降低 rate-limit 發生率
             }
 
             val result = ((stale ?: emptyList()) + newBars)
@@ -332,71 +377,112 @@ class TwseApiService(private val cacheDir: File? = null) {
             result
         }
 
-    // ── 全市場股票代號 ────────────────────────────────────────────────
+    // ── 全市場股票代號（依成交量排序）────────────────────────────────
 
     /**
-     * 取得全市場上市/上櫃股票代號 -> 公司名稱對應表。
-     * 上市來源：TWSE BWIBBU_d（欄 0=代號, 1=名稱）。
-     * 上櫃來源：TPEX openapi peratio_analysis（SecuritiesCompanyCode / CompanyName）。
+     * 取得依「當日成交量（張）」降冪排序的前 [limit] 支股票，回傳 code→name 對應表。
+     * 上市來源：TWSE STOCK_DAY_ALL（欄 0=代號, 1=名稱, 2=成交股數）。
+     * 上櫃來源：TPEX openapi daily_close_quotes（TradeVolume 欄位）。
+     * 若兩個成交量 API 均失敗，回退至 BWIBBU_d + peratio_analysis 取全量（無量排序）。
      * 只保留 4 位純數字代號（排除 ETF、權證）。
      */
-    suspend fun fetchAllCodesWithNames(): Map<String, String> = withContext(Dispatchers.IO) {
-        val result = mutableMapOf<String, String>()
+    suspend fun fetchAllCodesWithNames(limit: Int = Int.MAX_VALUE): Map<String, String> =
+        withContext(Dispatchers.IO) {
+            data class Entry(val code: String, val name: String, val volLots: Long)
+            val entries = mutableListOf<Entry>()
 
-        // 上市（TWSE）
-        try {
-            val url  = "https://www.twse.com.tw/exchangeReport/BWIBBU_d" +
-                       "?response=json&selectType=ALL"
-            Log.d(TAG, "fetchAllCodes: TWSE request start")
-            val body = get(url)
-            if (body == null) {
-                Log.w(TAG, "fetchAllCodes: TWSE body null (network error?)")
-            } else {
-                val root = json.parseToJsonElement(body).jsonObject
-                val stat = root["stat"]?.jsonPrimitive?.content
-                if (stat == "OK") {
-                    root["data"]?.jsonArray?.forEach { row ->
-                        val r    = row.jsonArray
-                        val code = r.getOrNull(0)?.jsonPrimitive?.content?.trim() ?: return@forEach
-                        val name = r.getOrNull(1)?.jsonPrimitive?.content?.trim() ?: code
-                        if (code.matches(Regex("\\d{4}"))) result[code] = name
+            // 上市（TWSE STOCK_DAY_ALL）
+            try {
+                val body = get("https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL?response=json")
+                if (body != null) {
+                    val root = json.parseToJsonElement(body).jsonObject
+                    if (root["stat"]?.jsonPrimitive?.content == "OK") {
+                        root["data"]?.jsonArray?.forEach { row ->
+                            try {
+                                val r    = row.jsonArray
+                                val code = r[0].jsonPrimitive.content.trim()
+                                if (!code.matches(Regex("\\d{4}"))) return@forEach
+                                val name = r[1].jsonPrimitive.content.trim()
+                                val vol  = cleanNum(r[2].jsonPrimitive.content).toLong() / 1000
+                                entries += Entry(code, name, vol)
+                            } catch (_: Exception) {}
+                        }
+                        Log.d(TAG, "fetchAllCodes: TWSE STOCK_DAY_ALL ${entries.size} stocks")
                     }
-                    Log.d(TAG, "fetchAllCodes: TWSE OK, listed=${result.size}")
-                } else {
-                    Log.w(TAG, "fetchAllCodes: TWSE stat=$stat body(100)=${body.take(100)}")
                 }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchAllCodes: TWSE exception: $e")
-        }
+            } catch (e: Exception) { Log.w(TAG, "fetchAllCodes: TWSE exception: $e") }
 
-        val twseCount = result.size
+            val twseCount = entries.size
 
-        // 上櫃（TPEX openapi）
-        try {
-            val url  = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"
-            Log.d(TAG, "fetchAllCodes: TPEX request start")
-            val body = get(url)
-            if (body == null) {
-                Log.w(TAG, "fetchAllCodes: TPEX body null (network error?)")
-            } else {
-                val arr = json.parseToJsonElement(body).jsonArray
-                arr.forEach { item ->
-                    val obj  = item.jsonObject
-                    val code = obj["SecuritiesCompanyCode"]?.jsonPrimitive?.content?.trim()
-                        ?: return@forEach
-                    val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
-                    if (code.matches(Regex("\\d{4}"))) result[code] = name
+            // 上櫃（TPEX openapi daily_close_quotes）
+            try {
+                val body = get(
+                    "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
+                )
+                if (body != null) {
+                    val arr = json.parseToJsonElement(body).jsonArray
+                    arr.forEach { item ->
+                        try {
+                            val obj  = item.jsonObject
+                            val code = obj["SecuritiesCompanyCode"]?.jsonPrimitive?.content?.trim()
+                                ?: return@forEach
+                            if (!code.matches(Regex("\\d{4}"))) return@forEach
+                            val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
+                            val vol  = obj["TradeVolume"]?.jsonPrimitive?.content
+                                ?.replace(",", "")?.toDoubleOrNull()?.toLong()?.div(1000) ?: 0L
+                            entries += Entry(code, name, vol)
+                        } catch (_: Exception) {}
+                    }
+                    Log.d(TAG, "fetchAllCodes: TPEX daily_close added ${entries.size - twseCount}, total=${entries.size}")
                 }
-                Log.d(TAG, "fetchAllCodes: TPEX OK, otc=${result.size - twseCount}, total=${result.size}")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchAllCodes: TPEX exception: $e")
-        }
+            } catch (e: Exception) { Log.w(TAG, "fetchAllCodes: TPEX daily_close exception: $e") }
 
-        if (result.isEmpty()) Log.e(TAG, "fetchAllCodes: BOTH sources failed, returning empty map")
-        result
-    }
+            // 有成交量資料：排序後取前 limit 支
+            if (entries.isNotEmpty()) {
+                return@withContext entries
+                    .sortedByDescending { it.volLots }
+                    .take(limit)
+                    .associate { it.code to it.name }
+                    .also { Log.i(TAG, "fetchAllCodes: top-${it.size} by volume") }
+            }
+
+            // 兩個成交量 API 均失敗，回退至原始代號清單（無成交量排序）
+            Log.w(TAG, "fetchAllCodes: volume APIs failed, fallback to full list")
+            val fallback = mutableMapOf<String, String>()
+            try {
+                val body = get(
+                    "https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&selectType=ALL"
+                )
+                if (body != null) {
+                    val root = json.parseToJsonElement(body).jsonObject
+                    if (root["stat"]?.jsonPrimitive?.content == "OK") {
+                        root["data"]?.jsonArray?.forEach { row ->
+                            val r    = row.jsonArray
+                            val code = r.getOrNull(0)?.jsonPrimitive?.content?.trim() ?: return@forEach
+                            val name = r.getOrNull(1)?.jsonPrimitive?.content?.trim() ?: code
+                            if (code.matches(Regex("\\d{4}"))) fallback[code] = name
+                        }
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "fetchAllCodes: BWIBBU fallback exception: $e") }
+            try {
+                val body = get(
+                    "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"
+                )
+                if (body != null) {
+                    val arr = json.parseToJsonElement(body).jsonArray
+                    arr.forEach { item ->
+                        val obj  = item.jsonObject
+                        val code = obj["SecuritiesCompanyCode"]?.jsonPrimitive?.content?.trim()
+                            ?: return@forEach
+                        val name = obj["CompanyName"]?.jsonPrimitive?.content?.trim() ?: code
+                        if (code.matches(Regex("\\d{4}"))) fallback[code] = name
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "fetchAllCodes: peratio fallback exception: $e") }
+            if (fallback.isEmpty()) Log.e(TAG, "fetchAllCodes: ALL sources failed")
+            fallback
+        }
 
     // ── 工具 ─────────────────────────────────────────────────────────
 
