@@ -10,6 +10,10 @@
         android:theme="@style/Theme.StockSwing"
         android:supportsRtl="true">
 
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-6931612619540388~4897192351" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
