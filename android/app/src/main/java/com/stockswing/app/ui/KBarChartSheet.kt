@@ -173,6 +173,31 @@ private fun MaLegend(label: String, color: Color) {
     }
 }
 
+// ── Pattern annotation helpers ─────────────────────────────────────
+
+private data class PatternAnnotation(val offsets: List<Int>, val isLong: Boolean, val key: String)
+
+private val MULTI_CANDLE_PATTERNS = listOf(
+    PatternAnnotation(listOf(2, 1, 0), true,  "P"),   // 紅三兵
+    PatternAnnotation(listOf(2, 1, 0), false, "PS"),  // 黑三兵
+    PatternAnnotation(listOf(3, 2, 1), true,  "E"),   // 強勢連漲
+    PatternAnnotation(listOf(3, 2, 1), false, "ES"),  // 弱勢連跌
+    PatternAnnotation(listOf(2, 1, 0), true,  "O"),   // 晨星
+    PatternAnnotation(listOf(2, 1, 0), false, "OS"),  // 黃昏之星
+    PatternAnnotation(listOf(1, 0),    true,  "I"),   // 吞噬陽線
+    PatternAnnotation(listOf(1, 0),    false, "IS"),  // 吞噬陰線
+    PatternAnnotation(listOf(2, 1, 0), true,  "Q"),   // Inside Bar 突破
+    PatternAnnotation(listOf(2, 1, 0), false, "QS"),  // Inside Bar 跌破
+)
+
+private fun Map<String, List<String>>.activeSignals(): Set<String> {
+    val custom = this["custom"]
+    if (custom != null) return custom.toSet()
+    return values.flatten()
+        .flatMap { combo -> combo.split("+") }
+        .toSet()
+}
+
 // ── 蠟燭圖 Canvas ───────────────────────────────────────────────────
 @Composable
 fun CandlestickChart(
@@ -306,6 +331,53 @@ fun CandlestickChart(
                 close()
             }
             drawPath(tri, ChartRed)
+        }
+
+        // ── 多K形態括弧標記 ───────────────────────────────────────────
+        val signals = hitPresets.activeSignals()
+        val labelPaint = android.graphics.Paint().apply {
+            textSize    = 20f
+            isFakeBoldText = true
+            isAntiAlias = true
+            textAlign   = android.graphics.Paint.Align.RIGHT
+        }
+        var bracketRow = 0
+        for (pat in MULTI_CANDLE_PATTERNS) {
+            if (pat.key !in signals) continue
+            val idxs = pat.offsets.mapNotNull { off ->
+                val i = n - 1 - off; if (i >= 0) i else null
+            }
+            if (idxs.size < 2) continue
+
+            val patColor = if (pat.isLong) ChartGreen else ChartRed
+            val lowestY  = idxs.maxOf { py(display[it].low) }
+            val bracketY = (lowestY + 10f + bracketRow * 12f).coerceAtMost(priceH - 4f)
+            bracketRow++
+
+            val firstX = (idxs.first() + 0.5f) * candleW
+            val lastX  = (idxs.last()  + 0.5f) * candleW
+
+            // Connecting line
+            drawLine(patColor, Offset(firstX, bracketY), Offset(lastX, bracketY), strokeWidth = 1f)
+            // End ticks
+            for (x in listOf(firstX, lastX)) {
+                drawLine(patColor, Offset(x, bracketY - 3f), Offset(x, bracketY + 3f), strokeWidth = 1f)
+            }
+            // Dots on each involved bar
+            for (idx in idxs) {
+                val cx = (idx + 0.5f) * candleW
+                drawCircle(patColor, radius = 2.5f, center = Offset(cx, bracketY))
+            }
+            // Label to the left of the bracket
+            labelPaint.color = android.graphics.Color.argb(
+                255,
+                (patColor.red   * 255).toInt(),
+                (patColor.green * 255).toInt(),
+                (patColor.blue  * 255).toInt(),
+            )
+            drawContext.canvas.nativeCanvas.drawText(
+                pat.key, firstX - 4f, bracketY + 7f, labelPaint
+            )
         }
     }
 }

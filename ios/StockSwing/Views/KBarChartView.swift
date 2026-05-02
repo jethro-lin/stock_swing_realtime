@@ -138,6 +138,38 @@ private struct MALegend: View {
     }
 }
 
+// MARK: - Pattern annotation model
+
+private struct PatternAnnotation {
+    let offsets: [Int]   // from last bar: 0=today, 1=yesterday, …
+    let color: Color
+    let label: String
+}
+
+private func activeSignals(from hitPresets: [String: [String]]) -> Set<String> {
+    if let custom = hitPresets["custom"] { return Set(custom) }
+    var result = Set<String>()
+    for combos in hitPresets.values {
+        for combo in combos {
+            for part in combo.split(separator: "+") { result.insert(String(part)) }
+        }
+    }
+    return result
+}
+
+private let multiCandlePatterns: [(key: String, offsets: [Int], isLong: Bool)] = [
+    ("P",  [2, 1, 0], true),   // 紅三兵
+    ("PS", [2, 1, 0], false),  // 黑三兵
+    ("E",  [3, 2, 1], true),   // 強勢連漲
+    ("ES", [3, 2, 1], false),  // 弱勢連跌
+    ("O",  [2, 1, 0], true),   // 晨星
+    ("OS", [2, 1, 0], false),  // 黃昏之星
+    ("I",  [1, 0],    true),   // 吞噬陽線
+    ("IS", [1, 0],    false),  // 吞噬陰線
+    ("Q",  [2, 1, 0], true),   // Inside Bar 突破
+    ("QS", [2, 1, 0], false),  // Inside Bar 跌破
+]
+
 // MARK: - Candlestick chart
 
 struct CandlestickChart: View {
@@ -264,6 +296,48 @@ struct CandlestickChart: View {
                             p.closeSubpath()
                         },
                         with: .color(chartRed)
+                    )
+                }
+
+                // Pattern bracket annotations
+                let signals = activeSignals(from: hitPresets)
+                var bracketRow = 0
+                for pat in multiCandlePatterns where signals.contains(pat.key) {
+                    let idxs = pat.offsets.compactMap { off -> Int? in
+                        let i = n - 1 - off; return i >= 0 ? i : nil
+                    }
+                    guard idxs.count >= 2 else { continue }
+
+                    let patColor = pat.isLong ? chartGreen : chartRed
+                    let lowestY  = idxs.map { py(display[$0].low) }.max() ?? priceH
+                    let bracketY = min(lowestY + CGFloat(10 + bracketRow * 12), priceH - 4)
+                    bracketRow  += 1
+
+                    let firstX = CGFloat(idxs.first!) * candleW + candleW / 2
+                    let lastX  = CGFloat(idxs.last!)  * candleW + candleW / 2
+
+                    // Connecting line
+                    ctx.stroke(
+                        Path { p in p.move(to: .init(x: firstX, y: bracketY)); p.addLine(to: .init(x: lastX, y: bracketY)) },
+                        with: .color(patColor), lineWidth: 1
+                    )
+                    // End ticks
+                    for x in [firstX, lastX] {
+                        ctx.stroke(
+                            Path { p in p.move(to: .init(x: x, y: bracketY - 3)); p.addLine(to: .init(x: x, y: bracketY + 3)) },
+                            with: .color(patColor), lineWidth: 1
+                        )
+                    }
+                    // Dots on each involved bar
+                    for idx in idxs {
+                        let cx = CGFloat(idx) * candleW + candleW / 2
+                        ctx.fill(Path(ellipseIn: CGRect(x: cx - 2.5, y: bracketY - 2.5, width: 5, height: 5)), with: .color(patColor))
+                    }
+                    // Signal label to the left
+                    ctx.draw(
+                        Text(pat.key).font(.system(size: 8, weight: .semibold)).foregroundColor(patColor),
+                        at: CGPoint(x: firstX - 4, y: bracketY),
+                        anchor: .trailing
                     )
                 }
             }
