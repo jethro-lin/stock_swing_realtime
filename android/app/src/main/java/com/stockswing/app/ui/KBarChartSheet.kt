@@ -2,12 +2,13 @@ package com.stockswing.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -16,9 +17,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import com.stockswing.app.model.HistoricalBar
 import com.stockswing.app.model.Preset
 import com.stockswing.app.model.SignalResult
@@ -205,18 +208,47 @@ fun CandlestickChart(
     hitPresets: Map<String, List<String>> = emptyMap(),
     modifier:   Modifier = Modifier,
 ) {
-    val display  = bars.takeLast(60)
+    if (bars.isEmpty()) return
+
+    val windowSize = 60
+    var barOffset      by remember { mutableIntStateOf(0) }
+    var dragBaseOffset by remember { mutableIntStateOf(0) }
+    var lastDragX      by remember { mutableFloatStateOf(0f) }
+
+    val display = remember(bars, barOffset) {
+        val endIdx   = bars.size - barOffset
+        val startIdx = maxOf(0, endIdx - windowSize)
+        if (endIdx > 0) bars.subList(startIdx, endIdx) else emptyList()
+    }
     if (display.isEmpty()) return
 
-    val isLong  = hitPresets.isLong()
-    val isShort = hitPresets.isShort()
+    val showSignals = barOffset == 0
 
-    val closes = display.map { it.close }
-    val ma5  = rollingAvg(closes, 5)
-    val ma10 = rollingAvg(closes, 10)
-    val ma20 = rollingAvg(closes, 20)
+    val closes = remember(display) { display.map { it.close } }
+    val ma5  = remember(closes) { rollingAvg(closes, 5)  }
+    val ma10 = remember(closes) { rollingAvg(closes, 10) }
+    val ma20 = remember(closes) { rollingAvg(closes, 20) }
 
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.pointerInput(bars.size) {
+            if (bars.size <= windowSize) return@pointerInput
+            detectHorizontalDragGestures(
+                onDragStart = { lastDragX = it.x },
+                onDragEnd   = { dragBaseOffset = barOffset; lastDragX = 0f },
+                onHorizontalDrag = { change, _ ->
+                    val candleW = size.width / windowSize.toFloat()
+                    val delta   = change.position.x - lastDragX
+                    val barDelta = (-delta / candleW).toInt()
+                    if (abs(barDelta) >= 1) {
+                        barOffset  = (dragBaseOffset + barDelta).coerceIn(0, bars.size - windowSize)
+                        dragBaseOffset = barOffset
+                        lastDragX  = change.position.x
+                    }
+                    change.consume()
+                }
+            )
+        }
+    ) {
         val n = display.size
         val w = size.width
         val h = size.height
@@ -240,14 +272,6 @@ fun CandlestickChart(
 
         val maxVol = display.maxOf { it.volumeLots }.toDouble()
         fun vy(v: Long) = (volTop + volH * (1.0 - v.toDouble() / maxVol)).toFloat()
-
-        // ── 訊號日高亮背景（最後一根）────────────────────────────────
-        val signalX = (n - 1) * candleW
-        drawRect(
-            color   = Color(0xFFFFD700).copy(alpha = 0.12f),
-            topLeft = Offset(signalX, 0f),
-            size    = Size(candleW, priceH),
-        )
 
         // ── 格線 ──────────────────────────────────────────────────────
         repeat(5) { k ->
@@ -306,78 +330,73 @@ fun CandlestickChart(
         drawMA(ma10, ChartBlue)
         drawMA(ma20, ChartOrange)
 
-        // ── 訊號方向三角標記（訊號日最後一根）────────────────────────
-        val signalBar = display.last()
-        val scx       = (n - 0.5f) * candleW
-        val triW      = (candleW * 0.7f).coerceIn(5f, 10f)
-        val triH      = triW * 0.8f
+        // ── 訊號標記（僅顯示訊號日在最後一根時）─────────────────────
+        if (showSignals) {
+            val signalBar = display.last()
+            val scx  = (n - 0.5f) * candleW
+            val triW = (candleW * 0.7f).coerceIn(5f, 10f)
+            val triH = triW * 0.8f
 
-        if (isLong) {
-            val tipY = py(signalBar.high) - 4f
-            val tri  = Path().apply {
-                moveTo(scx, tipY - triH)
-                lineTo(scx - triW / 2, tipY)
-                lineTo(scx + triW / 2, tipY)
-                close()
+            if (hitPresets.isLong()) {
+                val tipY = py(signalBar.high) - 4f
+                drawPath(Path().apply {
+                    moveTo(scx, tipY - triH)
+                    lineTo(scx - triW / 2, tipY)
+                    lineTo(scx + triW / 2, tipY)
+                    close()
+                }, ChartGreen)
             }
-            drawPath(tri, ChartGreen)
-        }
-        if (isShort) {
-            val tipY = py(signalBar.low) + 4f
-            val tri  = Path().apply {
-                moveTo(scx, tipY + triH)
-                lineTo(scx - triW / 2, tipY)
-                lineTo(scx + triW / 2, tipY)
-                close()
+            if (hitPresets.isShort()) {
+                val tipY = py(signalBar.low) + 4f
+                drawPath(Path().apply {
+                    moveTo(scx, tipY + triH)
+                    lineTo(scx - triW / 2, tipY)
+                    lineTo(scx + triW / 2, tipY)
+                    close()
+                }, ChartRed)
             }
-            drawPath(tri, ChartRed)
-        }
 
-        // ── 多K形態括弧標記 ───────────────────────────────────────────
-        val signals = hitPresets.activeSignals()
-        val labelPaint = android.graphics.Paint().apply {
-            textSize    = 20f
-            isFakeBoldText = true
-            isAntiAlias = true
-            textAlign   = android.graphics.Paint.Align.RIGHT
-        }
-        var bracketRow = 0
-        for (pat in MULTI_CANDLE_PATTERNS) {
-            if (pat.key !in signals) continue
-            val idxs = pat.offsets.mapNotNull { off ->
-                val i = n - 1 - off; if (i >= 0) i else null
+            // ── 多K形態括弧標記 ───────────────────────────────────────
+            val signals = hitPresets.activeSignals()
+            val labelPaint = android.graphics.Paint().apply {
+                textSize       = 20f
+                isFakeBoldText = true
+                isAntiAlias    = true
+                textAlign      = android.graphics.Paint.Align.RIGHT
             }
-            if (idxs.size < 2) continue
+            var bracketRow = 0
+            for (pat in MULTI_CANDLE_PATTERNS) {
+                if (pat.key !in signals) continue
+                val idxs = pat.offsets.mapNotNull { off ->
+                    val i = n - 1 - off; if (i >= 0) i else null
+                }
+                if (idxs.size < 2) continue
 
-            val patColor = if (pat.isLong) ChartGreen else ChartRed
-            val lowestY  = idxs.maxOf { py(display[it].low) }
-            val bracketY = (lowestY + 10f + bracketRow * 12f).coerceAtMost(priceH - 4f)
-            bracketRow++
+                val patColor = if (pat.isLong) ChartGreen else ChartRed
+                val lowestY  = idxs.maxOf { py(display[it].low) }
+                val bracketY = (lowestY + 10f + bracketRow * 12f).coerceAtMost(priceH - 4f)
+                bracketRow++
 
-            val firstX = (idxs.first() + 0.5f) * candleW
-            val lastX  = (idxs.last()  + 0.5f) * candleW
+                val firstX = (idxs.first() + 0.5f) * candleW
+                val lastX  = (idxs.last()  + 0.5f) * candleW
 
-            // Connecting line
-            drawLine(patColor, Offset(firstX, bracketY), Offset(lastX, bracketY), strokeWidth = 1f)
-            // End ticks
-            for (x in listOf(firstX, lastX)) {
-                drawLine(patColor, Offset(x, bracketY - 3f), Offset(x, bracketY + 3f), strokeWidth = 1f)
+                drawLine(patColor, Offset(firstX, bracketY), Offset(lastX, bracketY), strokeWidth = 1f)
+                for (x in listOf(firstX, lastX)) {
+                    drawLine(patColor, Offset(x, bracketY - 3f), Offset(x, bracketY + 3f), strokeWidth = 1f)
+                }
+                for (idx in idxs) {
+                    drawCircle(patColor, radius = 2.5f, center = Offset((idx + 0.5f) * candleW, bracketY))
+                }
+                labelPaint.color = android.graphics.Color.argb(
+                    255,
+                    (patColor.red   * 255).toInt(),
+                    (patColor.green * 255).toInt(),
+                    (patColor.blue  * 255).toInt(),
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    pat.key, firstX - 4f, bracketY + 7f, labelPaint
+                )
             }
-            // Dots on each involved bar
-            for (idx in idxs) {
-                val cx = (idx + 0.5f) * candleW
-                drawCircle(patColor, radius = 2.5f, center = Offset(cx, bracketY))
-            }
-            // Label to the left of the bracket
-            labelPaint.color = android.graphics.Color.argb(
-                255,
-                (patColor.red   * 255).toInt(),
-                (patColor.green * 255).toInt(),
-                (patColor.blue  * 255).toInt(),
-            )
-            drawContext.canvas.nativeCanvas.drawText(
-                pat.key, firstX - 4f, bracketY + 7f, labelPaint
-            )
         }
     }
 }

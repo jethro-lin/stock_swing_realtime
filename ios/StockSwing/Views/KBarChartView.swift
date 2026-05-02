@@ -176,16 +176,28 @@ struct CandlestickChart: View {
     let bars: [HistoricalBar]
     var hitPresets: [String: [String]] = [:]
 
-    private var display: [HistoricalBar] { Array(bars.suffix(60)) }
+    @State private var barOffset:      Int     = 0
+    @State private var dragBaseOffset: Int     = 0
+    @State private var lastTranslation: CGFloat = 0
+
+    private let windowSize = 60
+
+    private var displayBars: [HistoricalBar] {
+        let endIdx   = bars.count - barOffset
+        let startIdx = max(0, endIdx - windowSize)
+        return endIdx > 0 ? Array(bars[startIdx ..< endIdx]) : []
+    }
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geo in
             Canvas { ctx, size in
+                let display = displayBars
                 let n = display.count
                 guard n > 0 else { return }
 
-                let isLong  = hitPresets.isLong
-                let isShort = hitPresets.isShort
+                let showSignals = barOffset == 0
+                let isLong  = showSignals && hitPresets.isLong
+                let isShort = showSignals && hitPresets.isShort
 
                 // Layout
                 let priceH = size.height * 0.76
@@ -211,13 +223,6 @@ struct CandlestickChart: View {
                 func vy(_ v: Int64) -> CGFloat {
                     CGFloat(volTop + volH * (1.0 - Double(v) / maxVol))
                 }
-
-                // Signal day highlight (last candle)
-                let signalX = CGFloat(n - 1) * candleW
-                ctx.fill(
-                    Path(CGRect(x: signalX, y: 0, width: candleW, height: priceH)),
-                    with: .color(Color(red: 1, green: 0.843, blue: 0).opacity(0.12))
-                )
 
                 // Grid lines
                 for k in 0 ... 4 {
@@ -268,79 +273,95 @@ struct CandlestickChart: View {
                 drawMA(ctx, values: rollingAvg(closes, 10), candleW: candleW, py: py, color: chartBlue)
                 drawMA(ctx, values: rollingAvg(closes, 20), candleW: candleW, py: py, color: chartOrange)
 
-                // Signal direction triangles on last candle
-                let signalBar = display.last!
-                let scx       = CGFloat(n - 1) * candleW + candleW / 2
-                let triW      = min(max(candleW * 0.7, 5), 10)
-                let triH      = triW * 0.8
+                // Signal annotations — only on the default view (signal day is last candle)
+                if showSignals {
+                    let signalBar = display.last!
+                    let scx  = CGFloat(n - 1) * candleW + candleW / 2
+                    let triW = min(max(candleW * 0.7, 5), 10)
+                    let triH = triW * 0.8
 
-                if isLong {
-                    let tipY = py(signalBar.high) - 4
-                    ctx.fill(
-                        Path { p in
-                            p.move(to: .init(x: scx, y: tipY - triH))
-                            p.addLine(to: .init(x: scx - triW/2, y: tipY))
-                            p.addLine(to: .init(x: scx + triW/2, y: tipY))
-                            p.closeSubpath()
-                        },
-                        with: .color(chartGreen)
-                    )
-                }
-                if isShort {
-                    let tipY = py(signalBar.low) + 4
-                    ctx.fill(
-                        Path { p in
-                            p.move(to: .init(x: scx, y: tipY + triH))
-                            p.addLine(to: .init(x: scx - triW/2, y: tipY))
-                            p.addLine(to: .init(x: scx + triW/2, y: tipY))
-                            p.closeSubpath()
-                        },
-                        with: .color(chartRed)
-                    )
-                }
-
-                // Pattern bracket annotations
-                let signals = activeSignals(from: hitPresets)
-                var bracketRow = 0
-                for pat in multiCandlePatterns where signals.contains(pat.key) {
-                    let idxs = pat.offsets.compactMap { off -> Int? in
-                        let i = n - 1 - off; return i >= 0 ? i : nil
-                    }
-                    guard idxs.count >= 2 else { continue }
-
-                    let patColor = pat.isLong ? chartGreen : chartRed
-                    let lowestY  = idxs.map { py(display[$0].low) }.max() ?? priceH
-                    let bracketY = min(lowestY + CGFloat(10 + bracketRow * 12), priceH - 4)
-                    bracketRow  += 1
-
-                    let firstX = CGFloat(idxs.first!) * candleW + candleW / 2
-                    let lastX  = CGFloat(idxs.last!)  * candleW + candleW / 2
-
-                    // Connecting line
-                    ctx.stroke(
-                        Path { p in p.move(to: .init(x: firstX, y: bracketY)); p.addLine(to: .init(x: lastX, y: bracketY)) },
-                        with: .color(patColor), lineWidth: 1
-                    )
-                    // End ticks
-                    for x in [firstX, lastX] {
-                        ctx.stroke(
-                            Path { p in p.move(to: .init(x: x, y: bracketY - 3)); p.addLine(to: .init(x: x, y: bracketY + 3)) },
-                            with: .color(patColor), lineWidth: 1
+                    if isLong {
+                        let tipY = py(signalBar.high) - 4
+                        ctx.fill(
+                            Path { p in
+                                p.move(to: .init(x: scx, y: tipY - triH))
+                                p.addLine(to: .init(x: scx - triW/2, y: tipY))
+                                p.addLine(to: .init(x: scx + triW/2, y: tipY))
+                                p.closeSubpath()
+                            },
+                            with: .color(chartGreen)
                         )
                     }
-                    // Dots on each involved bar
-                    for idx in idxs {
-                        let cx = CGFloat(idx) * candleW + candleW / 2
-                        ctx.fill(Path(ellipseIn: CGRect(x: cx - 2.5, y: bracketY - 2.5, width: 5, height: 5)), with: .color(patColor))
+                    if isShort {
+                        let tipY = py(signalBar.low) + 4
+                        ctx.fill(
+                            Path { p in
+                                p.move(to: .init(x: scx, y: tipY + triH))
+                                p.addLine(to: .init(x: scx - triW/2, y: tipY))
+                                p.addLine(to: .init(x: scx + triW/2, y: tipY))
+                                p.closeSubpath()
+                            },
+                            with: .color(chartRed)
+                        )
                     }
-                    // Signal label to the left
-                    ctx.draw(
-                        Text(pat.key).font(.system(size: 8, weight: .semibold)).foregroundColor(patColor),
-                        at: CGPoint(x: firstX - 4, y: bracketY),
-                        anchor: .trailing
-                    )
+
+                    // Pattern bracket annotations
+                    let signals = activeSignals(from: hitPresets)
+                    var bracketRow = 0
+                    for pat in multiCandlePatterns where signals.contains(pat.key) {
+                        let idxs = pat.offsets.compactMap { off -> Int? in
+                            let i = n - 1 - off; return i >= 0 ? i : nil
+                        }
+                        guard idxs.count >= 2 else { continue }
+
+                        let patColor = pat.isLong ? chartGreen : chartRed
+                        let lowestY  = idxs.map { py(display[$0].low) }.max() ?? priceH
+                        let bracketY = min(lowestY + CGFloat(10 + bracketRow * 12), priceH - 4)
+                        bracketRow  += 1
+
+                        let firstX = CGFloat(idxs.first!) * candleW + candleW / 2
+                        let lastX  = CGFloat(idxs.last!)  * candleW + candleW / 2
+
+                        ctx.stroke(
+                            Path { p in p.move(to: .init(x: firstX, y: bracketY)); p.addLine(to: .init(x: lastX, y: bracketY)) },
+                            with: .color(patColor), lineWidth: 1
+                        )
+                        for x in [firstX, lastX] {
+                            ctx.stroke(
+                                Path { p in p.move(to: .init(x: x, y: bracketY - 3)); p.addLine(to: .init(x: x, y: bracketY + 3)) },
+                                with: .color(patColor), lineWidth: 1
+                            )
+                        }
+                        for idx in idxs {
+                            let cx = CGFloat(idx) * candleW + candleW / 2
+                            ctx.fill(Path(ellipseIn: CGRect(x: cx - 2.5, y: bracketY - 2.5, width: 5, height: 5)), with: .color(patColor))
+                        }
+                        ctx.draw(
+                            Text(pat.key).font(.system(size: 8, weight: .semibold)).foregroundColor(patColor),
+                            at: CGPoint(x: firstX - 4, y: bracketY),
+                            anchor: .trailing
+                        )
+                    }
                 }
             }
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { value in
+                        guard bars.count > windowSize else { return }
+                        let candleW  = geo.size.width / CGFloat(windowSize)
+                        let delta    = value.translation.width - lastTranslation
+                        let barDelta = Int(-delta / candleW)
+                        if barDelta != 0 {
+                            barOffset     = max(0, min(bars.count - windowSize, dragBaseOffset + barDelta))
+                            lastTranslation = value.translation.width
+                            dragBaseOffset  = barOffset
+                        }
+                    }
+                    .onEnded { _ in
+                        dragBaseOffset  = barOffset
+                        lastTranslation = 0
+                    }
+            )
         }
     }
 
