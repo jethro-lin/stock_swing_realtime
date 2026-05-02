@@ -2,7 +2,10 @@ package com.stockswing.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stockswing.app.model.HistoricalBar
+import com.stockswing.app.model.Preset
 import com.stockswing.app.model.SignalResult
 
 private val ChartGreen  = Color(0xFF00C853)
@@ -24,6 +28,24 @@ private val ChartRed    = Color(0xFFD50000)
 private val ChartBlue   = Color(0xFF2196F3)
 private val ChartOrange = Color(0xFFFF9800)
 
+// ── 從 hitPresets 判斷多空方向 ──────────────────────────────────────
+private fun Map<String, List<String>>.isLong(): Boolean {
+    val custom = this["custom"]
+    return if (custom != null)
+        custom.any { !it.endsWith("S") || it == "B2" }
+    else
+        keys.any { it != Preset.SHORT3_LEAN.key }
+}
+
+private fun Map<String, List<String>>.isShort(): Boolean {
+    val custom = this["custom"]
+    return if (custom != null)
+        custom.any { it.endsWith("S") && it != "B2" }
+    else
+        containsKey(Preset.SHORT3_LEAN.key)
+}
+
+// ── Bottom Sheet ────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KBarChartSheet(
@@ -57,12 +79,11 @@ fun KBarChartSheet(
                     val pctColor = if (result.quote.chgPct >= 0) ChartGreen else ChartRed
                     Text(
                         "%.2f  %+.2f%%".format(result.quote.price, result.quote.chgPct),
-                        color    = pctColor,
-                        fontSize = 14.sp,
+                        color      = pctColor,
+                        fontSize   = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                // MA legend
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MaLegend("MA5",  ChartGreen)
                     MaLegend("MA10", ChartBlue)
@@ -73,20 +94,68 @@ fun KBarChartSheet(
             Spacer(Modifier.height(12.dp))
 
             if (bars.isEmpty()) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(280.dp),
-                    Alignment.Center
-                ) {
+                Box(Modifier.fillMaxWidth().height(280.dp), Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
             } else {
+                // ── 蠟燭圖 ───────────────────────────────────────────
                 CandlestickChart(
-                    bars     = bars,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(320.dp),
+                    bars       = bars,
+                    hitPresets = result.hitPresets,
+                    modifier   = Modifier.fillMaxWidth().height(300.dp),
+                )
+
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+
+                // ── 命中策略 ──────────────────────────────────────────
+                Text("命中策略", fontSize = 11.sp, color = Color.Gray)
+                Spacer(Modifier.height(4.dp))
+
+                val custom = result.hitPresets["custom"]
+                if (custom != null) {
+                    val longHits  = custom.filter { !it.endsWith("S") || it == "B2" }
+                    val shortHits = custom.filter { it.endsWith("S") && it != "B2" }
+                    if (longHits.isNotEmpty())  SignalChipRow("多方訊號", longHits,  ChartGreen)
+                    if (shortHits.isNotEmpty()) SignalChipRow("空方訊號", shortHits, ChartRed)
+                } else {
+                    result.hitPresets.forEach { (key, combos) ->
+                        val preset = Preset.entries.find { it.key == key } ?: return@forEach
+                        val color  = if (preset == Preset.SHORT3_LEAN) ChartRed else ChartGreen
+                        SignalChipRow(preset.label, combos, color)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignalChipRow(label: String, chips: List<String>, color: Color) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            label,
+            fontSize   = 11.sp,
+            color      = color.copy(alpha = 0.7f),
+            fontWeight = FontWeight.SemiBold,
+            modifier   = Modifier.widthIn(min = 48.dp),
+        )
+        chips.forEach { chip ->
+            Surface(shape = RoundedCornerShape(4.dp), color = color.copy(alpha = 0.10f)) {
+                Text(
+                    chip,
+                    fontSize   = 11.sp,
+                    color      = color,
+                    fontWeight = FontWeight.Medium,
+                    modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
         }
@@ -104,10 +173,18 @@ private fun MaLegend(label: String, color: Color) {
     }
 }
 
+// ── 蠟燭圖 Canvas ───────────────────────────────────────────────────
 @Composable
-fun CandlestickChart(bars: List<HistoricalBar>, modifier: Modifier = Modifier) {
-    val display = bars.takeLast(60)
+fun CandlestickChart(
+    bars:       List<HistoricalBar>,
+    hitPresets: Map<String, List<String>> = emptyMap(),
+    modifier:   Modifier = Modifier,
+) {
+    val display  = bars.takeLast(60)
     if (display.isEmpty()) return
+
+    val isLong  = hitPresets.isLong()
+    val isShort = hitPresets.isShort()
 
     val closes = display.map { it.close }
     val ma5  = rollingAvg(closes, 5)
@@ -139,18 +216,25 @@ fun CandlestickChart(bars: List<HistoricalBar>, modifier: Modifier = Modifier) {
         val maxVol = display.maxOf { it.volumeLots }.toDouble()
         fun vy(v: Long) = (volTop + volH * (1.0 - v.toDouble() / maxVol)).toFloat()
 
+        // ── 訊號日高亮背景（最後一根）────────────────────────────────
+        val signalX = (n - 1) * candleW
+        drawRect(
+            color   = Color(0xFFFFD700).copy(alpha = 0.12f),
+            topLeft = Offset(signalX, 0f),
+            size    = Size(candleW, priceH),
+        )
+
         // ── 格線 ──────────────────────────────────────────────────────
-        val gridColor = Color(0x22000000)
         repeat(5) { k ->
             val y = priceH * k / 4f
-            drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 0.5f)
+            drawLine(Color(0x22000000), Offset(0f, y), Offset(w, y), strokeWidth = 0.5f)
         }
 
         // ── 價格標籤 ─────────────────────────────────────────────────
         val textPaint = android.graphics.Paint().apply {
-            color     = android.graphics.Color.argb(140, 100, 100, 100)
-            textSize  = 22f
-            textAlign = android.graphics.Paint.Align.RIGHT
+            color       = android.graphics.Color.argb(140, 100, 100, 100)
+            textSize    = 22f
+            textAlign   = android.graphics.Paint.Align.RIGHT
             isAntiAlias = true
         }
         repeat(5) { k ->
@@ -166,10 +250,8 @@ fun CandlestickChart(bars: List<HistoricalBar>, modifier: Modifier = Modifier) {
             val isUp  = bar.close >= bar.open
             val color = if (isUp) ChartGreen else ChartRed
 
-            // wick
             drawLine(color, Offset(cx, py(bar.high)), Offset(cx, py(bar.low)), strokeWidth = 1f)
 
-            // body
             val top = py(maxOf(bar.open, bar.close))
             val bot = py(minOf(bar.open, bar.close))
             drawRect(
@@ -177,8 +259,6 @@ fun CandlestickChart(bars: List<HistoricalBar>, modifier: Modifier = Modifier) {
                 topLeft = Offset(cx - bodyW / 2, top),
                 size    = Size(bodyW, (bot - top).coerceAtLeast(1f)),
             )
-
-            // volume
             drawRect(
                 color   = color.copy(alpha = 0.45f),
                 topLeft = Offset(cx - bodyW / 2, vy(bar.volumeLots)),
@@ -200,6 +280,33 @@ fun CandlestickChart(bars: List<HistoricalBar>, modifier: Modifier = Modifier) {
         drawMA(ma5,  ChartGreen)
         drawMA(ma10, ChartBlue)
         drawMA(ma20, ChartOrange)
+
+        // ── 訊號方向三角標記（訊號日最後一根）────────────────────────
+        val signalBar = display.last()
+        val scx       = (n - 0.5f) * candleW
+        val triW      = (candleW * 0.7f).coerceIn(5f, 10f)
+        val triH      = triW * 0.8f
+
+        if (isLong) {
+            val tipY = py(signalBar.high) - 4f
+            val tri  = Path().apply {
+                moveTo(scx, tipY - triH)
+                lineTo(scx - triW / 2, tipY)
+                lineTo(scx + triW / 2, tipY)
+                close()
+            }
+            drawPath(tri, ChartGreen)
+        }
+        if (isShort) {
+            val tipY = py(signalBar.low) + 4f
+            val tri  = Path().apply {
+                moveTo(scx, tipY + triH)
+                lineTo(scx - triW / 2, tipY)
+                lineTo(scx + triW / 2, tipY)
+                close()
+            }
+            drawPath(tri, ChartRed)
+        }
     }
 }
 
