@@ -54,6 +54,10 @@ private val GreenStrong = Color(0xFF00C853)
 private val RedStrong   = Color(0xFFD50000)
 private val GrayDot     = Color(0xFFBDBDBD)
 
+// 台灣慣例：漲 = 紅，跌 = 綠
+private val ColorUp   = RedStrong
+private val ColorDown = GreenStrong
+
 // ── 掃描模式 ──────────────────────────────────────────────────────
 private enum class ScanMode { PRESET, CUSTOM }
 
@@ -577,11 +581,11 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
 
     val dotColor = when {
         isLong && isShort -> Color(0xFFFFA000)
-        isLong            -> GreenStrong
-        isShort           -> RedStrong
+        isLong            -> ColorUp
+        isShort           -> ColorDown
         else              -> GrayDot
     }
-    val pctColor = if (quote.chgPct >= 0) GreenStrong else RedStrong
+    val pctColor = if (quote.chgPct >= 0) ColorUp else ColorDown
     val context  = LocalContext.current
 
     Column(
@@ -642,16 +646,16 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
             val longHits  = customHits.filter { !it.endsWith("S") || it == "B2" }
             val shortHits = customHits.filter { it.endsWith("S") && it != "B2" }
             if (longHits.isNotEmpty()) {
-                SignalRow("多方", longHits, GreenStrong)
+                SignalRow("多方", longHits, ColorUp)
             }
             if (shortHits.isNotEmpty()) {
-                SignalRow("空方", shortHits, RedStrong)
+                SignalRow("空方", shortHits, ColorDown)
             }
         } else {
             // 預設模式：每個 preset 一行
             result.hitPresets.forEach { (presetKey, combos) ->
                 val preset = Preset.entries.find { it.key == presetKey } ?: return@forEach
-                val color  = if (preset == Preset.SHORT3_LEAN) RedStrong else GreenStrong
+                val color  = if (preset == Preset.SHORT3_LEAN) ColorDown else ColorUp
                 SignalRow(preset.label, combos, color)
             }
         }
@@ -666,7 +670,7 @@ private fun MaRow(price: Double, ma5: Double, ma10: Double, ma20: Double) {
         verticalAlignment     = Alignment.CenterVertically,
     ) {
         listOf("MA5" to ma5, "MA10" to ma10, "MA20" to ma20).forEach { (label, ma) ->
-            val color = if (price >= ma) GreenStrong else RedStrong
+            val color = if (price >= ma) ColorUp else ColorDown
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(label, fontSize = 9.sp, color = color.copy(alpha = 0.7f))
                 Text("%.1f".format(ma), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = color)

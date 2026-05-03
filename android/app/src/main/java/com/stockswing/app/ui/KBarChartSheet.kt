@@ -31,6 +31,10 @@ private val ChartRed    = Color(0xFFD50000)
 private val ChartBlue   = Color(0xFF2196F3)
 private val ChartOrange = Color(0xFFFF9800)
 
+// 台灣慣例：漲 = 紅，跌 = 綠
+private val ColorUp   = ChartRed
+private val ColorDown = ChartGreen
+
 // ── 從 hitPresets 判斷多空方向 ──────────────────────────────────────
 private fun Map<String, List<String>>.isLong(): Boolean {
     val custom = this["custom"]
@@ -79,7 +83,7 @@ fun KBarChartSheet(
                         fontWeight = FontWeight.Bold,
                         fontSize   = 16.sp,
                     )
-                    val pctColor = if (result.quote.chgPct >= 0) ChartGreen else ChartRed
+                    val pctColor = if (result.quote.chgPct >= 0) ColorUp else ColorDown
                     Text(
                         "%.2f  %+.2f%%".format(result.quote.price, result.quote.chgPct),
                         color      = pctColor,
@@ -120,12 +124,12 @@ fun KBarChartSheet(
                 if (custom != null) {
                     val longHits  = custom.filter { !it.endsWith("S") || it == "B2" }
                     val shortHits = custom.filter { it.endsWith("S") && it != "B2" }
-                    if (longHits.isNotEmpty())  SignalChipRow("多方訊號", longHits,  ChartGreen)
-                    if (shortHits.isNotEmpty()) SignalChipRow("空方訊號", shortHits, ChartRed)
+                    if (longHits.isNotEmpty())  SignalChipRow("多方訊號", longHits,  ColorUp)
+                    if (shortHits.isNotEmpty()) SignalChipRow("空方訊號", shortHits, ColorDown)
                 } else {
                     result.hitPresets.forEach { (key, combos) ->
                         val preset = Preset.entries.find { it.key == key } ?: return@forEach
-                        val color  = if (preset == Preset.SHORT3_LEAN) ChartRed else ChartGreen
+                        val color  = if (preset == Preset.SHORT3_LEAN) ColorDown else ColorUp
                         SignalChipRow(preset.label, combos, color)
                     }
                 }
@@ -297,7 +301,7 @@ fun CandlestickChart(
         display.forEachIndexed { i, bar ->
             val cx    = (i + 0.5f) * candleW
             val isUp  = bar.close >= bar.open
-            val color = if (isUp) ChartGreen else ChartRed
+            val color = if (isUp) ColorUp else ColorDown
 
             drawLine(color, Offset(cx, py(bar.high)), Offset(cx, py(bar.low)), strokeWidth = 1f)
 
@@ -344,7 +348,7 @@ fun CandlestickChart(
                     lineTo(scx - triW / 2, tipY)
                     lineTo(scx + triW / 2, tipY)
                     close()
-                }, ChartGreen)
+                }, ColorUp)
             }
             if (hitPresets.isShort()) {
                 val tipY = py(signalBar.low) + 4f
@@ -353,7 +357,7 @@ fun CandlestickChart(
                     lineTo(scx - triW / 2, tipY)
                     lineTo(scx + triW / 2, tipY)
                     close()
-                }, ChartRed)
+                }, ColorDown)
             }
 
             // ── 多K形態括弧標記 ───────────────────────────────────────
@@ -372,7 +376,7 @@ fun CandlestickChart(
                 }
                 if (idxs.size < 2) continue
 
-                val patColor = if (pat.isLong) ChartGreen else ChartRed
+                val patColor = if (pat.isLong) ColorUp else ColorDown
                 val lowestY  = idxs.maxOf { py(display[it].low) }
                 val bracketY = (lowestY + 10f + bracketRow * 12f).coerceAtMost(priceH - 4f)
                 bracketRow++

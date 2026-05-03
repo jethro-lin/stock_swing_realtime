@@ -1,8 +1,12 @@
 import SwiftUI
 
-private let greenStrong = Color(red: 0, green: 0.784, blue: 0.325)
-private let redStrong   = Color(red: 0.835, green: 0, blue: 0)
+private let greenStrong = Color(red: 0,     green: 0.784, blue: 0.325)
+private let redStrong   = Color(red: 0.835, green: 0,     blue: 0)
 private let grayDot     = Color(white: 0.741)
+
+// 台灣慣例：漲 = 紅，跌 = 綠
+private let colorUp   = redStrong
+private let colorDown = greenStrong
 
 struct StockRowView: View {
     let result: SignalResult
@@ -21,8 +25,8 @@ struct StockRowView: View {
     }
     private var dotColor: Color {
         if isLong && isShort { return Color(red: 1, green: 0.627, blue: 0) }
-        if isLong  { return greenStrong }
-        if isShort { return redStrong }
+        if isLong  { return colorUp }
+        if isShort { return colorDown }
         return grayDot
     }
 
@@ -47,7 +51,7 @@ struct StockRowView: View {
 
                 Text(String(format: "%+.2f%%", result.quote.chgPct))
                     .font(.system(size: 12))
-                    .foregroundColor(result.quote.chgPct >= 0 ? greenStrong : redStrong)
+                    .foregroundColor(result.quote.chgPct >= 0 ? colorUp : colorDown)
                     .frame(minWidth: 64, alignment: .trailing)
 
                 Text(formatVol(result.quote.totalVolLots))
@@ -65,12 +69,12 @@ struct StockRowView: View {
             if let ch = customHits {
                 let longHits  = ch.filter { !$0.hasSuffix("S") || $0 == "B2" }
                 let shortHits = ch.filter { $0.hasSuffix("S") && $0 != "B2" }
-                if !longHits.isEmpty  { SignalRowView(label: "多方", chips: longHits,  color: greenStrong) }
-                if !shortHits.isEmpty { SignalRowView(label: "空方", chips: shortHits, color: redStrong)   }
+                if !longHits.isEmpty  { SignalRowView(label: "多方", chips: longHits,  color: colorUp) }
+                if !shortHits.isEmpty { SignalRowView(label: "空方", chips: shortHits, color: colorDown) }
             } else {
                 ForEach(result.hitPresets.sorted(by: { $0.key < $1.key }), id: \.key) { key, combos in
                     let preset = Preset(rawValue: key)
-                    let color  = preset == .short3Lean ? redStrong : greenStrong
+                    let color  = preset == .short3Lean ? colorDown : colorUp
                     let label  = preset?.label ?? key
                     SignalRowView(label: label, chips: combos, color: color)
                 }
@@ -145,7 +149,7 @@ struct MARowView: View {
             Spacer().frame(width: 14)
             ForEach([("MA5", ma5), ("MA10", ma10), ("MA20", ma20)], id: \.0) { label, ma in
                 let above = price >= ma
-                let color  = above ? greenStrong : redStrong
+                let color  = above ? colorUp : colorDown
                 HStack(spacing: 2) {
                     Text(label)
                         .font(.system(size: 9))

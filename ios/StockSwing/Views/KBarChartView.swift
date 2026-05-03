@@ -5,6 +5,10 @@ private let chartRed    = Color(red: 0.835, green: 0,     blue: 0)
 private let chartBlue   = Color(red: 0.129, green: 0.588, blue: 0.953)
 private let chartOrange = Color(red: 1,     green: 0.596, blue: 0)
 
+// 台灣慣例：漲 = 紅，跌 = 綠
+private let colorUp   = chartRed    // 陽線 / 多方
+private let colorDown = chartGreen  // 陰線 / 空方
+
 // MARK: - Hit direction helpers
 
 private extension Dictionary where Key == String, Value == [String] {
@@ -33,7 +37,7 @@ struct KBarChartSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(result.code)  \(result.name)")
                                 .font(.system(size: 16, weight: .bold))
-                            let pctColor = result.quote.chgPct >= 0 ? chartGreen : chartRed
+                            let pctColor = result.quote.chgPct >= 0 ? colorUp : colorDown
                             Text(String(format: "%.2f  %+.2f%%", result.quote.price, result.quote.chgPct))
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(pctColor)
@@ -70,12 +74,12 @@ struct KBarChartSheet: View {
                             if let custom = result.hitPresets["custom"] {
                                 let longHits  = custom.filter { !$0.hasSuffix("S") || $0 == "B2" }
                                 let shortHits = custom.filter { $0.hasSuffix("S") && $0 != "B2" }
-                                if !longHits.isEmpty  { SignalChipRow(label: "多方訊號", chips: longHits,  color: chartGreen) }
-                                if !shortHits.isEmpty { SignalChipRow(label: "空方訊號", chips: shortHits, color: chartRed) }
+                                if !longHits.isEmpty  { SignalChipRow(label: "多方訊號", chips: longHits,  color: colorUp) }
+                                if !shortHits.isEmpty { SignalChipRow(label: "空方訊號", chips: shortHits, color: colorDown) }
                             } else {
                                 ForEach(result.hitPresets.sorted(by: { $0.key < $1.key }), id: \.key) { key, combos in
                                     let preset = Preset(rawValue: key)
-                                    let color  = preset == .short3Lean ? chartRed : chartGreen
+                                    let color  = preset == .short3Lean ? colorDown : colorUp
                                     let label  = preset?.label ?? key
                                     SignalChipRow(label: label, chips: combos, color: color)
                                 }
@@ -250,8 +254,8 @@ struct CandlestickChart: View {
                 for (i, bar) in display.enumerated() {
                     let cx    = CGFloat(i) * candleW + candleW / 2
                     let isUp  = bar.close >= bar.open
-                    let color: GraphicsContext.Shading       = isUp ? .color(chartGreen)            : .color(chartRed)
-                    let colorFaint: GraphicsContext.Shading  = isUp ? .color(chartGreen.opacity(0.45)) : .color(chartRed.opacity(0.45))
+                    let color: GraphicsContext.Shading       = isUp ? .color(colorUp)            : .color(colorDown)
+                    let colorFaint: GraphicsContext.Shading  = isUp ? .color(colorUp.opacity(0.45)) : .color(colorDown.opacity(0.45))
 
                     ctx.stroke(
                         Path { p in p.move(to: .init(x: cx, y: py(bar.high))); p.addLine(to: .init(x: cx, y: py(bar.low))) },
@@ -289,7 +293,7 @@ struct CandlestickChart: View {
                                 p.addLine(to: .init(x: scx + triW/2, y: tipY))
                                 p.closeSubpath()
                             },
-                            with: .color(chartGreen)
+                            with: .color(colorUp)
                         )
                     }
                     if isShort {
@@ -301,7 +305,7 @@ struct CandlestickChart: View {
                                 p.addLine(to: .init(x: scx + triW/2, y: tipY))
                                 p.closeSubpath()
                             },
-                            with: .color(chartRed)
+                            with: .color(colorDown)
                         )
                     }
 
@@ -314,7 +318,7 @@ struct CandlestickChart: View {
                         }
                         guard idxs.count >= 2 else { continue }
 
-                        let patColor = pat.isLong ? chartGreen : chartRed
+                        let patColor = pat.isLong ? colorUp : colorDown
                         let lowestY  = idxs.map { py(display[$0].low) }.max() ?? priceH
                         let bracketY = min(lowestY + CGFloat(10 + bracketRow * 12), priceH - 4)
                         bracketRow  += 1
