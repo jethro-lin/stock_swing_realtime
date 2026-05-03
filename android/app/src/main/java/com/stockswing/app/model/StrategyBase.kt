@@ -13,6 +13,10 @@ data class StrategyBase(
     val ma5: Double,
     val ma10: Double,
     val ma20: Double,
+    // 均線方向：1=上升, -1=下降, 0=持平
+    val ma5Dir:  Int,
+    val ma10Dir: Int,
+    val ma20Dir: Int,
     // RSI
     val rsiNow: Double,
     val rsiPrv: Double,

@@ -231,7 +231,8 @@ class StockViewModel: ObservableObject {
                 results.append(SignalResult(code: code, name: entry.quote.name,
                                             quote: entry.quote, signals: sigs,
                                             hitPresets: hitPresets,
-                                            ma5: entry.base.ma5, ma10: entry.base.ma10, ma20: entry.base.ma20))
+                                            ma5: entry.base.ma5, ma10: entry.base.ma10, ma20: entry.base.ma20,
+                                            ma5Dir: entry.base.ma5Dir, ma10Dir: entry.base.ma10Dir, ma20Dir: entry.base.ma20Dir))
             }
 
             results.sort {

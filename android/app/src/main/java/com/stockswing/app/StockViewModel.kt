@@ -324,6 +324,9 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                         ma5        = base.ma5,
                         ma10       = base.ma10,
                         ma20       = base.ma20,
+                        ma5Dir     = base.ma5Dir,
+                        ma10Dir    = base.ma10Dir,
+                        ma20Dir    = base.ma20Dir,
                     )
                 }.sortedWith(
                     compareByDescending<SignalResult> { it.totalComboHits }

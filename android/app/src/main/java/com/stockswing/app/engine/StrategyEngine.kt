@@ -49,6 +49,16 @@ object StrategyEngine {
         val ma10 = if (closes.size >= 10) closes.takeLast(10).average() else ma5
         val ma20 = closes.takeLast(20).average()
 
+        // MA 方向：sign(close[n-1] - close[n-1-k])
+        fun dir(k: Int): Int {
+            if (n <= k) return 0
+            val d = closes[n - 1] - closes[n - 1 - k]
+            return if (d > 0) 1 else if (d < 0) -1 else 0
+        }
+        val ma5Dir  = dir(5)
+        val ma10Dir = dir(10)
+        val ma20Dir = dir(20)
+
         // ── RSI ──────────────────────────────────────────────────────
         val rsiArr = TechnicalIndicators.rsi(closes)
         val rsiNow = rsiArr[0]; val rsiPrv = rsiArr[1]
@@ -115,6 +125,7 @@ object StrategyEngine {
             avg5 = avg5, avg20Vol = avg20Vol, volYesterday = volYesterday,
             volExpand = volExpand, volShrink = volShrink, tideShrink = tideShrink,
             ma5 = ma5, ma10 = ma10, ma20 = ma20,
+            ma5Dir = ma5Dir, ma10Dir = ma10Dir, ma20Dir = ma20Dir,
             rsiNow = rsiNow, rsiPrv = rsiPrv,
             high5 = high5, low5 = low5,
             threeUp = threeUp, threeDn = threeDn,

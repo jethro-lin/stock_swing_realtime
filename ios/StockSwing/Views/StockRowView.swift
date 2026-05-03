@@ -62,7 +62,10 @@ struct StockRowView: View {
 
             // MA row
             if result.ma5 > 0 {
-                MARowView(price: result.quote.price, ma5: result.ma5, ma10: result.ma10, ma20: result.ma20)
+                MARowView(price: result.quote.price,
+                          ma5: result.ma5,   ma5Dir: result.ma5Dir,
+                          ma10: result.ma10, ma10Dir: result.ma10Dir,
+                          ma20: result.ma20, ma20Dir: result.ma20Dir)
             }
 
             // Signal chips
@@ -139,21 +142,29 @@ struct ComboChipView: View {
 }
 
 struct MARowView: View {
-    let price: Double
-    let ma5:   Double
-    let ma10:  Double
-    let ma20:  Double
+    let price:   Double
+    let ma5:     Double; let ma5Dir:  Int
+    let ma10:    Double; let ma10Dir: Int
+    let ma20:    Double; let ma20Dir: Int
+
+    private func arrow(_ dir: Int) -> String {
+        dir > 0 ? "↑" : dir < 0 ? "↓" : "→"
+    }
 
     var body: some View {
         HStack(spacing: 6) {
             Spacer().frame(width: 14)
-            ForEach([("MA5", ma5), ("MA10", ma10), ("MA20", ma20)], id: \.0) { label, ma in
+            ForEach([("MA5", ma5, ma5Dir), ("MA10", ma10, ma10Dir), ("MA20", ma20, ma20Dir)],
+                    id: \.0) { label, ma, dir in
                 let above = price >= ma
                 let color  = above ? colorUp : colorDown
-                HStack(spacing: 2) {
+                HStack(spacing: 1) {
                     Text(label)
                         .font(.system(size: 9))
                         .foregroundColor(color.opacity(0.7))
+                    Text(arrow(dir))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(dir > 0 ? colorUp : dir < 0 ? colorDown : .gray)
                     Text(String(format: "%.1f", ma))
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(color)

@@ -11,9 +11,12 @@ data class SignalResult(
     val signals: StrategySignals,
     // key = preset.key（如 "long3_lean"）, value = 命中的 combo 列表（如 ["B+K+R", "B+R"]）
     val hitPresets: Map<String, List<String>> = emptyMap(),
-    val ma5:  Double = 0.0,
-    val ma10: Double = 0.0,
-    val ma20: Double = 0.0,
+    val ma5:     Double = 0.0,
+    val ma10:    Double = 0.0,
+    val ma20:    Double = 0.0,
+    val ma5Dir:  Int    = 0,
+    val ma10Dir: Int    = 0,
+    val ma20Dir: Int    = 0,
 ) {
     val totalComboHits: Int get() = hitPresets.values.sumOf { it.size }
 }

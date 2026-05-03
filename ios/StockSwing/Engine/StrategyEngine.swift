@@ -33,6 +33,16 @@ enum StrategyEngine {
         let ma10 = closes.count >= 10 ? Array(closes.suffix(10)).reduce(0, +) / 10.0 : ma5
         let ma20 = Array(closes.suffix(20)).reduce(0, +) / 20.0
 
+        // MA 方向：sign(close[n-1] - close[n-1-k])，即 MA(k) 斜率符號
+        func dir(_ k: Int) -> Int {
+            guard n > k else { return 0 }
+            let d = closes[n - 1] - closes[n - 1 - k]
+            return d > 0 ? 1 : d < 0 ? -1 : 0
+        }
+        let ma5Dir  = dir(5)
+        let ma10Dir = dir(10)
+        let ma20Dir = dir(20)
+
         let rsi    = TechnicalIndicators.rsi(closes)
         let rsiNow = rsi.now; let rsiPrv = rsi.prev
 
@@ -78,6 +88,7 @@ enum StrategyEngine {
             avg5: avg5, avg20Vol: avg20Vol, volYesterday: volYesterday,
             volExpand: volExpand, volShrink: volShrink, tideShrink: tideShrink,
             ma5: ma5, ma10: ma10, ma20: ma20,
+            ma5Dir: ma5Dir, ma10Dir: ma10Dir, ma20Dir: ma20Dir,
             rsiNow: rsiNow, rsiPrv: rsiPrv,
             high5: high5, low5: low5,
             threeUp: threeUp, threeDn: threeDn,

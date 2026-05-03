@@ -637,7 +637,10 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
 
         // ── MA 標注 ───────────────────────────────────────────────
         if (result.ma5 > 0) {
-            MaRow(price = quote.price, ma5 = result.ma5, ma10 = result.ma10, ma20 = result.ma20)
+            MaRow(price = quote.price,
+                  ma5 = result.ma5,   ma5Dir  = result.ma5Dir,
+                  ma10 = result.ma10, ma10Dir = result.ma10Dir,
+                  ma20 = result.ma20, ma20Dir = result.ma20Dir)
         }
 
         // ── 命中標籤 ──────────────────────────────────────────────
@@ -663,19 +666,33 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
 }
 
 @Composable
-private fun MaRow(price: Double, ma5: Double, ma10: Double, ma20: Double) {
+private fun MaRow(
+    price: Double,
+    ma5: Double,   ma5Dir:  Int,
+    ma10: Double,  ma10Dir: Int,
+    ma20: Double,  ma20Dir: Int,
+) {
+    fun arrow(dir: Int) = if (dir > 0) "↑" else if (dir < 0) "↓" else "→"
+
     Row(
         Modifier.padding(start = 20.dp, top = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment     = Alignment.CenterVertically,
     ) {
-        listOf("MA5" to ma5, "MA10" to ma10, "MA20" to ma20).forEach { (label, ma) ->
-            val color = if (price >= ma) ColorUp else ColorDown
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(label, fontSize = 9.sp, color = color.copy(alpha = 0.7f))
-                Text("%.1f".format(ma), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = color)
+        listOf(Triple("MA5", ma5, ma5Dir), Triple("MA10", ma10, ma10Dir), Triple("MA20", ma20, ma20Dir))
+            .forEach { (label, ma, dir) ->
+                val color     = if (price >= ma) ColorUp else ColorDown
+                val arrowColor = when {
+                    dir > 0 -> ColorUp
+                    dir < 0 -> ColorDown
+                    else    -> Color.Gray
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(label,             fontSize = 9.sp, color = color.copy(alpha = 0.7f))
+                    Text(arrow(dir),        fontSize = 9.sp, fontWeight = FontWeight.Bold, color = arrowColor)
+                    Text("%.1f".format(ma), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = color)
+                }
             }
-        }
     }
 }
 

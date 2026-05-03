@@ -12,6 +12,10 @@ struct StrategyBase {
     let ma5: Double
     let ma10: Double
     let ma20: Double
+    // 均線方向：1=上升, -1=下降, 0=持平
+    let ma5Dir:  Int
+    let ma10Dir: Int
+    let ma20Dir: Int
     // RSI
     let rsiNow: Double
     let rsiPrv: Double
