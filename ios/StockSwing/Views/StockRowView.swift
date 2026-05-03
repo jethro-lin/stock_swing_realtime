@@ -56,6 +56,11 @@ struct StockRowView: View {
                     .frame(minWidth: 60, alignment: .trailing)
             }
 
+            // MA row
+            if result.ma5 > 0 {
+                MARowView(price: result.quote.price, ma5: result.ma5, ma10: result.ma10, ma20: result.ma20)
+            }
+
             // Signal chips
             if let ch = customHits {
                 let longHits  = ch.filter { !$0.hasSuffix("S") || $0 == "B2" }
@@ -126,6 +131,31 @@ struct ComboChipView: View {
             .padding(.vertical, 1)
             .background(color.opacity(0.10))
             .cornerRadius(4)
+    }
+}
+
+struct MARowView: View {
+    let price: Double
+    let ma5:   Double
+    let ma10:  Double
+    let ma20:  Double
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer().frame(width: 14)
+            ForEach([("MA5", ma5), ("MA10", ma10), ("MA20", ma20)], id: \.0) { label, ma in
+                let above = price >= ma
+                let color  = above ? greenStrong : redStrong
+                HStack(spacing: 2) {
+                    Text(label)
+                        .font(.system(size: 9))
+                        .foregroundColor(color.opacity(0.7))
+                    Text(String(format: "%.1f", ma))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(color)
+                }
+            }
+        }
     }
 }
 

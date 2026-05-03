@@ -631,6 +631,11 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
             )
         }
 
+        // ── MA 標注 ───────────────────────────────────────────────
+        if (result.ma5 > 0) {
+            MaRow(price = quote.price, ma5 = result.ma5, ma10 = result.ma10, ma20 = result.ma20)
+        }
+
         // ── 命中標籤 ──────────────────────────────────────────────
         if (customHits != null) {
             // 自選模式：分多空兩群顯示命中訊號
@@ -648,6 +653,23 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
                 val preset = Preset.entries.find { it.key == presetKey } ?: return@forEach
                 val color  = if (preset == Preset.SHORT3_LEAN) RedStrong else GreenStrong
                 SignalRow(preset.label, combos, color)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaRow(price: Double, ma5: Double, ma10: Double, ma20: Double) {
+    Row(
+        Modifier.padding(start = 20.dp, top = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        listOf("MA5" to ma5, "MA10" to ma10, "MA20" to ma20).forEach { (label, ma) ->
+            val color = if (price >= ma) GreenStrong else RedStrong
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(label, fontSize = 9.sp, color = color.copy(alpha = 0.7f))
+                Text("%.1f".format(ma), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = color)
             }
         }
     }
