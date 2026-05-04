@@ -145,6 +145,127 @@ _STRAT_KEYS = list(STRATEGY_NAMES.keys())            # ['A','AS','B','BS',...]
 _IS_SHORT   = [k.endswith("S") for k in _STRAT_KEYS] # True 表示空方策略
 _N_STRATS   = len(_STRAT_KEYS)
 
+# ──────────────────────────────────────────────────────────────────────────────
+# 訊號分類與條件說明（供 --list 使用）
+# ──────────────────────────────────────────────────────────────────────────────
+
+# 六大類別定義
+SIGNAL_CATEGORIES: list[tuple[str, str, list[str]]] = [
+    # (類別名稱, 英文名, [訊號碼...])
+    ("① 缺口動能", "Gap Momentum",          ["B", "B2", "BS"]),
+    ("② 超賣反轉", "Oversold Reversal",      ["R", "K", "L", "M", "C",
+                                               "RS", "KS", "LS", "MS", "CS"]),
+    ("③ 趨勢延續", "Trend Following",        ["A", "N", "F",
+                                               "AS", "NS", "FS"]),
+    ("④ 動能突破", "Momentum Breakout",      ["D", "E",
+                                               "DS", "ES"]),
+    ("⑤ K線型態", "Candlestick Pattern",     ["H", "I", "O", "P", "Q",
+                                               "HS", "IS", "OS", "PS", "QS"]),
+    ("⑥ 其他振盪", "Other Oscillator",       ["G", "J",
+                                               "GS", "JS"]),
+]
+
+# 每個訊號的觸發條件說明
+SIGNAL_COND: dict[str, str] = {
+    "B":  "gap≥+2%，量≥0.5x均量，收漲",
+    "B2": "gap≥+5%，量≥0.8x均量（B 的強化版，約佔 B 的 15%）",
+    "BS": "gap≤-2%，收跌，爆量（量≥1.5x均量）",
+    "C":  "RSI<30，close<MA20",
+    "CS": "RSI>70，close>MA20",
+    "D":  "收盤>5日最高，MA5>MA20",
+    "DS": "收盤<5日最低，MA5<MA20",
+    "E":  "連漲≥3日，MA5>MA10>MA20",
+    "ES": "連跌≥3日，MA5<MA10<MA20",
+    "F":  "成交量>均量，收漲",
+    "FS": "成交量萎縮<均量，收跌",
+    "G":  "量<均量（縮量），MA5>MA20，收漲",
+    "GS": "量縮後爆量（≥1.5x），MA5<MA20，收跌",
+    "H":  "鎚子K線（下影≥2倍實體），close<MA20",
+    "HS": "射擊之星（上影≥2倍實體），close>MA20",
+    "I":  "多頭吞噬（大陽吞前陰）",
+    "IS": "空頭吞噬（大陰吞前陽）",
+    "J":  "MACD 黃金交叉（DIF 上穿 DEA），MA5>MA20，收漲",
+    "JS": "MACD 死亡交叉（DIF 下穿 DEA），MA5<MA20，收跌",
+    "K":  "收盤接近布林下軌（±2%），close<MA20",
+    "KS": "收盤接近布林上軌（±2%），close>MA20",
+    "L":  "KD<30 黃金交叉，close<MA20",
+    "LS": "KD>70 死亡交叉，close>MA20",
+    "M":  "威廉%R<−80（超賣），MA5<MA20，收跌",
+    "MS": "威廉%R>−20（超買），MA5>MA20，收漲",
+    "N":  "MA5>MA10>MA20，回測 MA5 後收回 MA5 上",
+    "NS": "MA5<MA10<MA20，反彈至 MA5 下方後再跌破",
+    "O":  "晨星型態（陰→小實體→大陽），close<MA20",
+    "OS": "黃昏之星（陽→小實體→大陰），close>MA20",
+    "P":  "紅三兵（連三根實體遞增陽線），MA5>MA20",
+    "PS": "黑三兵（連三根實體遞增陰線），MA5<MA20",
+    "Q":  "InsideBar 突破（前日內包，今日向上突破），MA5>MA20",
+    "QS": "InsideBar 跌破（前日內包，今日向下跌破），MA5<MA20",
+    "R":  "BIAS<−10%（超跌，收盤偏離 MA20 超過 10%）",
+    "RS": "BIAS>+10%（超漲，收盤偏離 MA20 超過 10%）",
+    "A":  "MA5>MA20（多頭排列），昨收>前日收（上漲）",
+    "AS": "MA5<MA20（空頭排列），爆量（≥1.5x均量），收跌",
+}
+
+
+def print_strategy_list() -> None:
+    """--list：印出所有訊號分類與 preset 組合清單。"""
+    W = 78
+    line = "═" * W
+
+    print(f"\n{line}")
+    print(f"  📋  台股隔日沖  訊號代碼 & 策略組合 總覽")
+    print(f"{line}\n")
+
+    # ── Part 1：訊號分類 ──────────────────────────────────────
+    print("  【訊號分類】\n")
+    for cat_zh, cat_en, codes in SIGNAL_CATEGORIES:
+        print(f"  {cat_zh}  {cat_en}")
+        print(f"  {'─' * (W - 2)}")
+        long_codes  = [c for c in codes if not c.endswith("S") or c == "BS"]
+        short_codes = [c for c in codes if c.endswith("S") and c != "BS"]
+
+        # 先印多方
+        for code in long_codes:
+            name = STRATEGY_NAMES.get(code, "")
+            cond = SIGNAL_COND.get(code, "")
+            direction = "🔴多" if not code.endswith("S") else "🔵空"
+            if code == "BS":
+                direction = "🔵空"
+            label = f"  {code:<4} {direction}  {name:<18}  {cond}"
+            print(label)
+        # 再印空方（若有）
+        if short_codes:
+            print()
+            for code in short_codes:
+                name = STRATEGY_NAMES.get(code, "")
+                cond = SIGNAL_COND.get(code, "")
+                label = f"  {code:<4} 🔵空  {name:<18}  {cond}"
+                print(label)
+        print()
+
+    # ── Part 2：Preset 組合清單 ───────────────────────────────
+    print(f"\n{line}")
+    print(f"  📦  Preset 組合清單  （--preset NAME 使用）")
+    print(f"{line}\n")
+
+    for pname, combos in COMBO_PRESETS.items():
+        exit_day = PRESET_EXIT_DAY.get(pname)
+        exit_str = f"exit-day={exit_day}" if exit_day else "exit-day=2（預設）"
+        direction = "多方" if pname.startswith("long") else ("空方" if pname.startswith("short") else "多空")
+        n = len(combos)
+        if n == 0:
+            status = "（已廢除）"
+        else:
+            status = f"{n} 個組合"
+        print(f"  ── {pname:<16} {direction}  {status}  {exit_str}")
+        if combos:
+            for combo in combos:
+                print(f"       {combo}")
+        print()
+
+    print(line)
+    print()
+
 
 # ══════════════════════════════════════════════
 # 組合預設清單（--preset 用）
@@ -253,61 +374,35 @@ COMBO_PRESETS: dict[str, list[str]] = {
         "BS+KS",       # 56.9%  EV+0.589%  n=274  max -10.34%              | -7%: EV+0.583%
         "AS+BS+FS",    # 53.8%  EV+0.570%  n=474  max -11.80%              | -7%: EV+0.458%
     ],
-    # ── long3_lean：多方精簡版（2400日回測，B多已移除爆量條件，2026-04-25）──────────
+    # ── long3_lean：多方精簡版（2400日回測，新訊號條件 MA5/MA20過濾後，2026-05-04）──
     # 注意：B2多觸發時 B多必然同時觸發（B2 gap≥5% ⊃ B gap≥2%）
     #       故 B2+R = B+R+B2（同一批交易），preset 只保留 B2+X 形式，避免重複
+    # 所有組合 EV 均正，2400日樣本充足（⚠️少=樣本<100，統計不可靠供參考）
     "long3_lean": [
-        # ▸ TIER 1  EV ≥ 2%（exit_day=3 最佳）
-        "M+R+B2",     # 71.9%  EV+2.995%  n=128   ⭐⭐勝率王＋大EV
-        "R+B2",       # 70.3%  EV+2.704%  n=155   ⭐（≡ B+R+B2）
-        "B+K+R",      # 68.7%  EV+2.585%  n=614   ⭐大樣本高EV
-        "B+K+L",      # 69.4%  EV+2.435%  n=229   ⭐高勝率
-        "B2+K",       # 58.9%  EV+2.238%  n=107   ⭐BB下軌確認（≡ B+K+B2）
-        # ▸ TIER 2  EV 1–2%
-        "B+F+L",      # 71.0%  EV+2.025%  n=217   均量擴張＋KD超賣
-        "B+F+K",      # 65.2%  EV+1.996%  n=391   均量擴張＋布林下軌
-        "B+L+R",      # 67.8%  EV+1.778%  n=447   三指標共振
-        "B+F+R",      # 67.8%  EV+1.630%  n=594
-        "K+L+R",      # 63.7%  EV+1.613%  n=347   純技術指標（無B）
-        "B+M+R",      # 62.8%  EV+1.418%  n=1481  大樣本穩健
-        # ▸ TIER 3  大樣本基線（EV 0.5–1.5%）
-        "B+R",        # 63.6%  EV+1.379%  n=1717  最大樣本基線
-        "B+K",        # 60.4%  EV+1.484%  n=1081  高頻觸發
-        "K+R",        # 55.5%  EV+0.738%  n=1696  純指標大樣本
-        "B2+M",       # 56.0%  EV+0.996%  n=291   ≡ B+M+B2
+        # ▸ TIER 1  EV ≥ 3%（exit_day=3 最佳）
+        "B+K+R",      # 69.9%  EV+3.733%  n=489   ⭐充足樣本最高EV
+        "B2+K",       # 69.5%  EV+3.774%  n=95    ⚠️少  BB下軌確認（≡ B+K+B2）
+        "M+R+B2",     # 59.8%  EV+3.206%  n=127   ⭐⭐EV之王
+        # ▸ TIER 2  EV 2–3%
+        "B+F+K",      # 63.6%  EV+2.946%  n=308   均量擴張＋布林下軌
+        "K+L+R",      # 69.2%  EV+2.940%  n=344   純指標三共振
+        "B+K+L",      # 65.6%  EV+2.757%  n=189   高勝率三指標
+        "B+F+L",      # 63.8%  EV+2.672%  n=185   均量擴張＋KD超賣
+        "R+B2",       # 55.8%  EV+2.406%  n=154   （≡ B+R+B2）
+        "B+F+R",      # 61.4%  EV+2.329%  n=500   均量擴張＋BIAS超跌
+        "B+L+R",      # 63.6%  EV+2.203%  n=396   三指標共振
+        "B+M+R",      # 61.7%  EV+2.092%  n=1272  大樣本穩健
+        "B+K",        # 59.8%  EV+2.081%  n=908   高頻觸發
+        # ▸ TIER 3  大樣本基線（EV 1.5–2%，高訊號頻率）
+        "B+R",        # 60.1%  EV+1.876%  n=1491  最大樣本基線
+        "K+R",        # 58.9%  EV+1.746%  n=1707  純指標大樣本
+        "B2+M",       # 54.8%  EV+1.716%  n=186   ≡ B+M+B2
     ],
-    # ── long_trend：多方趨勢追蹤版（2400日回測，2026-04-26）─────────────────────
-    # 適用時機：大盤急彈後「回穩上漲期」，此時 long3_lean 的超跌指標（R/K/M/L）
-    #           訊號歸零，但趨勢指標（A/N/E/D/F）訊號量反而增加 1.4–3.7 倍。
-    # 核心邏輯：B（跳空缺口）= 觸發器，趨勢策略（A/N/E/D/F）= 結構確認
-    #           純趨勢策略 EV 全為負；加入 B 後轉正（跳空確認市場有真實新增買盤）
-    # 特性：WR 44–47%（vs long3_lean 55–72%），EV 較低（0.25–0.50%）
-    #       屬「趨勢跟蹤」型：少贏但大贏，嚴守停損為必要條件
-    # 注意：B+A+N ≡ B+N（N 已隱含 MA5>MA20），B+A+E ≡ B+E（同理），不重複列出
-    # ★ B2（跳空≥5%）= B（跳空≥2%）的強化版，訊號約佔 B 的 11–24%，EV 全面提升 +0.2～+0.8%
-    #   → 每筆 B 訊號若同時觸發 B2，視為強化訊號，優先關注
-    "long_trend": [
-        # ▸ TIER 0  B2 強化版（缺口≥5%，EV ≥ 0.90%）  ← B2 觸發時優先使用
-        "B2+N+F",   # 51.1%  EV+0.955%  n=227   ⭐⭐均量擴張＋多頭回測（B版+0.76%）
-        "B2+F",     # 48.6%  EV+0.932%  n=1699  ⭐大樣本基線（B版+0.51%）
-        "B2+A+D",   # 47.6%  EV+0.567%  n=2319  均線多頭＋突破前高（B版+0.41%）
-        "B2+A",     # 47.7%  EV+0.607%  n=2732  均線多頭大樣本（B版+0.44%）
-        "B2+D",     # 47.1%  EV+0.472%  n=2874  突破前高大樣本（B版+0.39%）
-        "B2+N",     # 47.4%  EV+0.272%  n=614   多頭回測MA5（B版+0.17%）
-        # ▸ TIER 1  EV ≥ 0.40%  （B 缺口≥2% 通用版）
-        "B+N+F",    # 44.3%  EV+0.192%  n=2054  均量擴張＋多頭回測MA5確認
-        "B+E+F",    # 45.7%  EV+0.478%  n=904   強勢連漲＋均量擴張
-        "B+F",      # 46.8%  EV+0.419%  n=11354 ⭐大樣本基線，均量擴張確認趨勢
-        "B+E+D",    # 44.7%  EV+0.414%  n=1103  強勢連漲＋突破近5日高點
-        # ▸ TIER 2  EV 0.10–0.40%
-        "B+E",      # 46.1%  EV+0.197%  n=1941  強勢連漲（MA5>MA10>MA20）
-        "B+N",      # 44.6%  EV+0.105%  n=4577  多頭排列回測MA5後站回
-        "B+A+D",    # 45.2%  EV+0.153%  n=9849  均線多頭（MA5>MA20）＋突破前高
-        "B+N+D",    # 46.6%  EV+0.308%  n=1286  多頭回測＋突破前高（勝率最高）
-        # ▸ TIER 3  大樣本基線
-        "B+A",      # 45.1%  EV+0.168%  n=17992 均線多頭大樣本
-        "B+D",      # 44.9%  EV+0.084%  n=13047 突破前高大樣本
-    ],
+    # long_trend（趨勢延續類）已廢除（2026-05-04）
+    # 原因：缺口動能×趨勢延續組合在 2400日回測中 EV 全面偏低（+0.02～+0.61%），
+    #       勝率天花板 48%，與 long3_lean 差距過大，不具實用性。
+    #       保留空 list 以防舊指令報錯，使用者改用 long3_lean。
+    "long_trend": [],
     # ── short3_lean：空方精簡版（從 short3 2400日回測去除多餘組合後保留 14 個）──
     # 移除原則：
     #   ① 三策略 EV < 子兩策略 EV（加了策略反而變差）
@@ -389,7 +484,7 @@ COMBO_PRESETS["all3_lean"] = (
 PRESET_EXIT_DAY: dict[str, int] = {
     # 多方：exit-day=3 全面最佳（K+L+R EV +0.63→+3.01%，K+R +0.14→+1.78%）
     "long3_lean":  3,
-    # 多方趨勢：exit-day=3（B+trend 組合回測最佳出場日）
+    # long_trend 已廢除，保留 key 避免舊指令報錯
     "long_trend":  3,
     # 空方：exit-day=1 整體最穩
     # （BS+GS/AS+DS+GS 在 D2/D3 變負；D1 收盤含漲跌停板邏輯最能保留獲利）
@@ -400,12 +495,12 @@ PRESET_EXIT_DAY: dict[str, int] = {
 }
 
 
-# ── allforall：6 個 preset 全集（long1+long2+long3+short1+short2+short3）──
-# 用途：一次掃描全部歷代策略組合，做大規模回測或交叉比較
-# ⚠️ 注意事項：
-#   1. long1 全為負 EV（v1 舊版 90 日回測），保留作為對照組
-#   2. 自動去重，保留首次出現順序（v3 > v2 > v1 越新越優先）
-#   3. 不同 preset 間有重疊組合（如 B+R、BS+RS）會只算一次
+# ── allforall：多空精選合集（2026-05-04 更新）────────────────────────
+# 包含：long3_lean（最新精選）+ long3 + long2 + short3_lean + short3 + short2 + short1
+# ⚠️ 移除 long1：全為負 EV 的 v1 舊版組合，且大量與已廢除的 long_trend 重疊
+#                （B+E+F, B+F, B+E, B+D 等趨勢型負 EV 組合一併清除）
+# ⚠️ 移除 long_trend：EV 偏低（+0.03～+0.61%），已於 2026-05-04 廢除
+# 自動去重，保留首次出現順序（越新越優先）
 def _dedup_keep_order(seq: list[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -416,10 +511,10 @@ def _dedup_keep_order(seq: list[str]) -> list[str]:
     return out
 
 COMBO_PRESETS["allforall"] = _dedup_keep_order(
-    # 多方：v3（精選）→ v2（中期）→ v1（舊版負 EV，僅供對照）
-    COMBO_PRESETS["long3"]  + COMBO_PRESETS["long2"]  + COMBO_PRESETS["long1"] +
-    # 空方：v3（精選）→ v2（中期）→ v1（90 日舊版）
-    COMBO_PRESETS["short3"] + COMBO_PRESETS["short2"] + COMBO_PRESETS["short1"]
+    # 多方：lean（最新精選）→ v3 → v2（已移除 long1 負EV 及 long_trend 趨勢型）
+    COMBO_PRESETS["long3_lean"] + COMBO_PRESETS["long3"] + COMBO_PRESETS["long2"] +
+    # 空方：lean（最新精選）→ v3 → v2 → v1
+    COMBO_PRESETS["short3_lean"] + COMBO_PRESETS["short3"] + COMBO_PRESETS["short2"] + COMBO_PRESETS["short1"]
 )
 
 
@@ -427,7 +522,7 @@ def resolve_preset(preset: str) -> list[str]:
     """
     將 --preset 名稱展開成組合清單。
     支援逗號分隔的多 preset，回傳合併（去重保序）清單。
-    例如：--preset long3_lean,long_trend
+    例如：--preset long3_lean,short3_lean
     不存在時印出可用清單並回傳空 list。
     """
     names = [p.strip().lower() for p in preset.split(",") if p.strip()]
@@ -1906,27 +2001,27 @@ def _check(df: pd.DataFrame, i: int,
         # ★ 多方已移除爆量條件（量多反而降低多方 EV，見量比分析 2026-04-25）
         "A":  bool(ma5 > ma20 and chg_pct > 0),                     # 移除 vol_ratio
         "AS": bool(ma5 < ma20 and vol_ratio >= vol_mult and chg_pct < 0),
-        "B":  bool(gap >= 2.0 and chg_pct > 0),                     # 移除 vol_ratio 1.3x
+        "B":  bool(gap >= 2.0 and vol_ratio >= 0.5 and chg_pct > 0),  # 加最低量門檻 0.5x（防假缺口）
         "BS": bool(gap <= -2.0 and vol_ratio >= 1.3 and chg_pct < 0),
         "C":  bool(rsi_p < 35 and rsi_t > rsi_p and close > ma5),
         "CS": bool(rsi_p > 65 and rsi_t < rsi_p and close < ma5),
-        "D":  bool(close > hi5),                                     # 移除 vol_ratio
+        "D":  bool(close > hi5 and ma5 > ma20),                      # 需在均線多頭才有效突破
         "DS": bool(close < lo5 and vol_ratio >= vol_mult),
         "E":  bool(three_up and ma5 > ma10 > ma20 and chg_pct > 0),
         "ES": bool(three_dn and ma5 < ma10 < ma20 and chg_pct < 0),
         # 均量類
-        "F":  bool(vol_expand and chg_pct > 0),                     # 移除單日 vol_ratio，保留均量擴張趨勢
+        "F":  bool(vol_expand and chg_pct > 0),
         "FS": bool(vol_shrink and vol_ratio >= vol_mult and chg_pct < 0),
-        "G":  bool(tide_shrink and chg_pct > 0),                     # 移除爆量，改成縮量後上漲
-        "GS": bool(tide_shrink and vol_ratio >= vol_mult and chg_pct < 0),
+        "G":  bool(tide_shrink and ma5 > ma20 and chg_pct > 0),      # 縮量反彈需在多頭趨勢
+        "GS": bool(tide_shrink and ma5 < ma20 and vol_ratio >= vol_mult and chg_pct < 0),  # 同理空頭
         # K棒型態
-        "H":  bool(hammer),
-        "HS": bool(shoot_star),
+        "H":  bool(hammer    and close < ma20),  # 鎚子需在 MA20 以下（超賣情境才有反轉意義）
+        "HS": bool(shoot_star and close > ma20),  # 射擊之星需在 MA20 以上（超買情境）
         "I":  bool(engulf_bull),
         "IS": bool(engulf_bear),
         # 技術指標類（新增）
-        "J":  bool(macd_golden and chg_pct > 0),
-        "JS": bool(macd_death  and chg_pct < 0),
+        "J":  bool(macd_golden and ma5 > ma20 and chg_pct > 0),      # MACD 金叉需順趨勢
+        "JS": bool(macd_death  and ma5 < ma20 and chg_pct < 0),      # MACD 死叉需順趨勢
         "K":  bool(bb_bounce),
         "KS": bool(bb_rejection),
         "L":  bool(kd_oversold_cross),
@@ -1936,12 +2031,12 @@ def _check(df: pd.DataFrame, i: int,
         "N":  bool(ma_pull_bull),
         "NS": bool(ma_pull_bear),
         # 進階K棒型態（新增）
-        "O":  bool(morning_star),
-        "OS": bool(evening_star),
-        "P":  bool(three_soldiers),
-        "PS": bool(three_crows),
-        "Q":  bool(inside_breakout),
-        "QS": bool(inside_breakdown),
+        "O":  bool(morning_star  and close < ma20),  # 晨星需在 MA20 以下
+        "OS": bool(evening_star  and close > ma20),  # 黃昏星需在 MA20 以上
+        "P":  bool(three_soldiers and ma5 > ma20),   # 紅三兵需在多頭趨勢
+        "PS": bool(three_crows    and ma5 < ma20),   # 黑三兵需在空頭趨勢
+        "Q":  bool(inside_breakout  and ma5 > ma20), # IB 突破需在多頭趨勢
+        "QS": bool(inside_breakdown and ma5 < ma20), # IB 跌破需在空頭趨勢
         # 均值回歸（新增）
         "R":  bool(bias_oversold),
         "RS": bool(bias_overbought),
@@ -2189,24 +2284,24 @@ def _precompute_signals_vec(sub: pd.DataFrame,
             # 量多反而降低多方 EV；空方保留爆量條件（量大對空方有正向確認）
             _f((ma5_v > ma20_v)                               & (chg_pct > 0)),   # A  移除 vol_mult
             _f((ma5_v < ma20_v)   & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # AS 保留
-            _f((gap >= 2.0)                                   & (chg_pct > 0)),   # B  移除 1.3x
+            _f((gap >= 2.0)  & (vol_ratio >= 0.5)            & (chg_pct > 0)),   # B  最低量 0.5x
             _f((gap <= -2.0)       & (vol_ratio >= 1.3)       & (chg_pct < 0)),   # BS 保留
-            _f((rsi_prev < 35)     & (rsi_v > rsi_prev)       & (c > ma5_v)),     # C  無量條件
-            _f((rsi_prev > 65)     & (rsi_v < rsi_prev)       & (c < ma5_v)),     # CS 無量條件
-            _f(c > hi5_v),                                                         # D  移除 vol_mult
-            _f((c < lo5_v)         & (vol_ratio >= vol_mult)),                     # DS 保留
+            _f((rsi_prev < 35)     & (rsi_v > rsi_prev)       & (c > ma5_v)),     # C
+            _f((rsi_prev > 65)     & (rsi_v < rsi_prev)       & (c < ma5_v)),     # CS
+            _f((c > hi5_v)         & (ma5_v > ma20_v)),                            # D  需多頭趨勢
+            _f((c < lo5_v)         & (vol_ratio >= vol_mult)),                     # DS
             _f(three_up            & (ma5_v > ma10_v) & (ma10_v > ma20_v) & (chg_pct > 0)),  # E
             _f(three_dn            & (ma5_v < ma10_v) & (ma10_v < ma20_v) & (chg_pct < 0)),  # ES
-            _f(vol_expand                                     & (chg_pct > 0)),   # F  移除 vol_ratio
-            _f(vol_shrink          & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # FS 保留
-            _f(tide_shrink                                    & (chg_pct > 0)),   # G  移除 vol_mult
-            _f(tide_shrink         & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # GS 保留
-            _f(hammer),                                                            # H
-            _f(shoot_star),                                                        # HS
+            _f(vol_expand                                     & (chg_pct > 0)),   # F
+            _f(vol_shrink          & (vol_ratio >= vol_mult)  & (chg_pct < 0)),   # FS
+            _f(tide_shrink         & (ma5_v > ma20_v)         & (chg_pct > 0)),   # G  需多頭趨勢
+            _f(tide_shrink         & (ma5_v < ma20_v) & (vol_ratio >= vol_mult) & (chg_pct < 0)),  # GS 需空頭趨勢
+            _f(hammer              & (c < ma20_v)),                                # H  需在 MA20 以下
+            _f(shoot_star          & (c > ma20_v)),                                # HS 需在 MA20 以上
             _f(engulf_bull),                                                       # I
             _f(engulf_bear),                                                       # IS
-            _f(macd_golden_v       & (chg_pct > 0)),                              # J
-            _f(macd_death_v        & (chg_pct < 0)),                              # JS
+            _f(macd_golden_v       & (ma5_v > ma20_v) & (chg_pct > 0)),           # J  需多頭趨勢
+            _f(macd_death_v        & (ma5_v < ma20_v) & (chg_pct < 0)),           # JS 需空頭趨勢
             _f(bb_bounce_v),                                                       # K
             _f(bb_rejection_v),                                                    # KS
             _f(kd_oversold_v),                                                     # L
@@ -2215,12 +2310,12 @@ def _precompute_signals_vec(sub: pd.DataFrame,
             _f(wr_overbought_v),                                                   # MS
             _f(ma_pull_bull_v),                                                    # N
             _f(ma_pull_bear_v),                                                    # NS
-            _f(morning_star_v),                                                    # O
-            _f(evening_star_v),                                                    # OS
-            _f(three_soldiers_v),                                                  # P
-            _f(three_crows_v),                                                     # PS
-            _f(inside_breakout_v),                                                 # Q
-            _f(inside_breakdown_v),                                                # QS
+            _f(morning_star_v      & (c < ma20_v)),                                # O  需在 MA20 以下
+            _f(evening_star_v      & (c > ma20_v)),                                # OS 需在 MA20 以上
+            _f(three_soldiers_v    & (ma5_v > ma20_v)),                            # P  需多頭趨勢
+            _f(three_crows_v       & (ma5_v < ma20_v)),                            # PS 需空頭趨勢
+            _f(inside_breakout_v   & (ma5_v > ma20_v)),                            # Q  需多頭趨勢
+            _f(inside_breakdown_v  & (ma5_v < ma20_v)),                            # QS 需空頭趨勢
             _f(bias_oversold_v),                                                   # R
             _f(bias_overbought_v),                                                 # RS
             _f(b2_long_v),                                                         # B2
@@ -2253,6 +2348,53 @@ def run_scan(data: dict, min_hit: int, vol_mult: float,
             return None
 
         sigs = _check(df, len(df) - 1, min_avg_vol, vol_mult)
+
+        # ── MA20 方向判斷 ────────────────────────────────────────
+        # 比較今日 MA20 與 10 個交易日前的 MA20
+        # 需要至少 30 根 K 棒（MA20 + 10 天位移）
+        _SIDEWAYS_THRESH = 0.01   # 1% → 橫盤門檻
+        if len(df) >= 31:
+            ma20_now = float(df["Close"].iloc[-20:].mean())
+            ma20_10d = float(df["Close"].iloc[-30:-10].mean())
+            ma20_slope = (ma20_now - ma20_10d) / ma20_10d if ma20_10d > 0 else 0
+            if abs(ma20_slope) < _SIDEWAYS_THRESH:
+                ma20_dir = "橫"
+            elif ma20_slope > 0:
+                ma20_dir = "升"
+            else:
+                ma20_dir = "降"
+        else:
+            ma20_dir   = "—"
+            ma20_slope = 0.0
+
+        # ── MA20 訊號過濾 ────────────────────────────────────────
+        # 升：只用 C/K/L/M 多；CS/KS/LS/MS/R/RS 全部關閉
+        # 降：只用 CS/KS/LS/MS 空；C/K/L/M/R/RS 全部關閉
+        # 橫：R/RS 啟用（BIAS 策略）；C/K/L/M 兩方向均可保留
+        # —（資料不足）：不過濾
+        if ma20_dir == "升":
+            for k in ("CS", "KS", "LS", "MS", "R", "RS",
+                      "JS", "PS", "QS"):       # J/P/Q 空方版本關閉
+                sigs[k] = False
+        elif ma20_dir == "降":
+            for k in ("C", "K", "L", "M", "R", "RS",
+                      "J", "P", "Q"):          # J/P/Q 多方版本關閉
+                sigs[k] = False
+        elif ma20_dir == "橫":
+            for k in ("C", "CS", "K", "KS", "L", "LS", "M", "MS", "R", "RS",
+                      "J", "JS", "P", "PS", "Q", "QS"):  # 橫盤全關
+                sigs[k] = False
+
+        # MA20方向顯示標籤
+        slope_pct = ma20_slope * 100
+        if ma20_dir == "升":
+            ma20_label = f"升↑{slope_pct:+.1f}%"
+        elif ma20_dir == "降":
+            ma20_label = f"降↓{slope_pct:+.1f}%"
+        elif ma20_dir == "橫":
+            ma20_label = f"橫─{slope_pct:+.1f}%"
+        else:
+            ma20_label = "—"
 
         # ── 組合過濾 ─────────────────────────────────────────────
         matched_combos = []
@@ -2337,6 +2479,7 @@ def run_scan(data: dict, min_hit: int, vol_mult: float,
             "B2大跳空": "✅" if sigs["B2"] else "❌",
             "命中數":    hit,
             "方向":      direction,
+            "MA20方向":  ma20_label,
             "策略清單":  strats,
             "命中組合":  " | ".join(matched_combos) if matched_combos else "—",
         }
@@ -3096,9 +3239,12 @@ def save_scan_xlsx(df: pd.DataFrame, fname: str) -> None:
         "代號": 8, "名稱": 11, "資料日期": 11,
         "收盤": 8, "價位區間": 10,
         "漲跌幅(%)": 9, "成交量(張)": 10, "量/均量": 7,
-        "命中數": 6, "方向": 5,
+        "命中數": 6, "方向": 5, "MA20方向": 11,
         "策略清單": 28, "命中組合": 36,
     }
+    MA20_UP_FG   = "FF375623"   # 升 → 深綠
+    MA20_DN_FG   = "FFC00000"   # 降 → 深紅
+    MA20_FL_FG   = "FF7F6000"   # 橫 → 深黃褐
     SIG_WIDTH = 5   # 訊號欄統一寬度
 
     headers = list(df.columns)
@@ -3158,6 +3304,20 @@ def save_scan_xlsx(df: pd.DataFrame, fname: str) -> None:
 
             elif col == "方向":
                 fg = BULL_FG if val == "多" else BEAR_FG
+                cell.fill      = row_fill
+                cell.font      = Font(name="Arial", size=9, bold=True, color=fg)
+                cell.alignment = Alignment(horizontal="center")
+
+            elif col == "MA20方向":
+                sv = str(val)
+                if sv.startswith("升"):
+                    fg = MA20_UP_FG
+                elif sv.startswith("降"):
+                    fg = MA20_DN_FG
+                elif sv.startswith("橫"):
+                    fg = MA20_FL_FG
+                else:
+                    fg = "FF808080"
                 cell.fill      = row_fill
                 cell.font      = Font(name="Arial", size=9, bold=True, color=fg)
                 cell.alignment = Alignment(horizontal="center")
@@ -3255,7 +3415,7 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
         strat_cols = [_strat_col[s] for s in _STRAT_KEYS if s in involved]
         cols = (["代號","名稱","資料日期","收盤","漲跌幅(%)","成交量(張)","量/均量"]
                 + strat_cols
-                + ["命中數","方向","命中組合"])
+                + ["命中數","方向","MA20方向","命中組合"])
     else:
         cols = ["代號","名稱","資料日期","收盤","漲跌幅(%)","成交量(張)","量/均量",
                 "A多","AS空","B多","BS空","C多","CS空","D多","DS空","E多","ES空",
@@ -3266,7 +3426,7 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
                 "N均線多","NS均線空","O晨星","OS昏星",
                 "P三兵","PS三鴉","Q破IB多","QS破IB空","R偏低多","RS偏高空",
                 "B2大跳空",
-                "命中數","方向"]
+                "命中數","方向","MA20方向"]
 
     # ── 依股價分組輸出 ─────────────────────────────────────────
     any_printed = False
@@ -3547,6 +3707,8 @@ def main():
     # ── 執行模式 ──────────────────────────────────
     mode_group = parser.add_argument_group("執行模式（預設：--scan）")
     mode_ex = mode_group.add_mutually_exclusive_group()
+    mode_ex.add_argument("--list",           action="store_true",
+                         help="列出所有訊號代碼（含條件說明）與 preset 組合清單，無需資料源直接印出")
     mode_ex.add_argument("--scan",           action="store_true",
                          help="執行選股（預設，無參數時自動啟用）")
     mode_ex.add_argument("--backtest",       action="store_true",
@@ -3617,7 +3779,7 @@ def main():
                                "如 --show-combos \"BS+GS,AS+BS+GS\"")
     bt_group.add_argument("--preset",      type=str, default=None, metavar="NAME[,NAME2...]",
                           help=f"使用預設組合清單（等同 --show-combos 展開版），"
-                               f"支援逗號分隔多個 preset，例如：long3_lean,long_trend。"
+                               f"支援逗號分隔多個 preset，例如：long3_lean,short3_lean。"
                                f"可用：{', '.join(COMBO_PRESETS.keys())}")
 
     # ── 資料來源 ──────────────────────────────────
@@ -3656,6 +3818,11 @@ def main():
                             help="查詢筆數，預設 20")
 
     args = parser.parse_args()
+
+    # ── --list：直接印出策略清單，不需要資料源 ──────────────────
+    if args.list:
+        print_strategy_list()
+        sys.exit(0)
 
     # 預設模式：無其他模式時自動啟用 --scan
     if not any([args.scan, args.backtest, args.backtest_limit,
