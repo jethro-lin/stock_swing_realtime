@@ -2012,6 +2012,16 @@ def print_table(df: pd.DataFrame, cols: list, title: str = ""):
 
 def print_scan_result(rows: list, date_str: str, min_hit: int,
                       show_combos: list = None):
+    RESET = "\033[0m"
+    _PRICE_BUCKETS = [
+        (0,    50,   "🔵  低價股  ( 收盤 < 50 )"),
+        (50,   100,  "🟢  中低價  ( 50 ~ 100 )"),
+        (100,  300,  "🟡  中價股  ( 100 ~ 300 )"),
+        (300,  500,  "🟠  中高價  ( 300 ~ 500 )"),
+        (500,  1000, "🔴  高價股  ( 500 ~ 1000 )"),
+        (1000, None, "🟣  超高價  ( > 1000 )"),
+    ]
+
     print("\n" + "═"*100)
     print(f"  📋 隔日沖選股彙整  {date_str}  命中門檻：≥{min_hit}")
     if show_combos:
@@ -2022,39 +2032,53 @@ def print_scan_result(rows: list, date_str: str, min_hit: int,
     if not rows:
         print("  （今日無股票達到命中門檻）")
         return
+
     df = pd.DataFrame(rows)
+    df["_close_f"] = pd.to_numeric(df["收盤"], errors="coerce").fillna(0)
 
-    # 有組合篩選時：精簡欄位，只顯示有觸發的策略欄 + 命中組合
-    if show_combos:
-        # 收集本次所有組合涉及的策略，對應到顯示欄位名稱
-        _strat_col = {
-            "A":"A多","AS":"AS空","B":"B多","BS":"BS空",
-            "C":"C多","CS":"CS空","D":"D多","DS":"DS空",
-            "E":"E多","ES":"ES空","F":"F均量多","FS":"FS均量空",
-            "G":"G潮汐多","GS":"GS潮汐空","H":"H鎚子","HS":"HS射擊",
-            "I":"I吞多","IS":"IS吞空",
-        }
-        involved = set()
-        for c in show_combos:
-            involved.update(c.split("+"))
-        strat_cols = [_strat_col[s] for s in _STRAT_KEYS if s in involved]
-        cols = (["代號","名稱","資料日期","收盤","漲跌幅(%)","成交量(張)","量/均量"]
-                + strat_cols
-                + ["命中數","方向","命中組合"])
-    else:
-        cols = ["代號","名稱","資料日期","收盤","漲跌幅(%)","成交量(張)","量/均量",
-                "A多","AS空","B多","BS空","C多","CS空","D多","DS空","E多","ES空",
-                "F均量多","FS均量空","G潮汐多","GS潮汐空",
-                "H鎚子","HS射擊","I吞多","IS吞空",
-                "命中數","方向"]
+    # ── 依股價分組輸出（文字版，不印訊號矩陣）────────────────────
+    any_printed = False
+    for lo, hi, label_long in _PRICE_BUCKETS:
+        if hi is None:
+            mask = df["_close_f"] >= lo
+        else:
+            mask = (df["_close_f"] >= lo) & (df["_close_f"] < hi)
+        grp = df[mask].sort_values("_close_f").copy()
+        if grp.empty:
+            continue
+        any_printed = True
+        print(f"\n  {label_long}  （{len(grp)} 檔）")
+        print("  " + "─"*98)
+        for _, r in grp.iterrows():
+            strats_raw = str(r.get("策略清單", ""))
+            all_sigs   = [s for s in strats_raw.split(",") if s.strip()]
+            direction  = str(r.get("方向", "多"))
+            if direction == "多":
+                active = [s for s in all_sigs if not s.endswith("S")]
+            else:
+                active = [s for s in all_sigs if s.endswith("S") or s in ("B","B2")]
+            sig_str  = " ".join(active) if active else "—"
+            dir_icon = "▲" if direction == "多" else "▽"
+            chg      = float(r.get("漲跌幅(%)", 0))
+            chg_color = "\033[31m" if chg > 0 else ("\033[32m" if chg < 0 else "")
+            vol_k    = int(r.get("成交量(張)", 0))
+            vol_r    = str(r.get("量/均量", "—"))
+            combo    = str(r.get("命中組合", "—"))
+            combo_str = f"  組合：{combo}" if combo != "—" else ""
+            vol_field = _pad(f"{vol_k}張({vol_r})", 15)
+            print(f"  │  {_pad(str(r['代號']), 7)}{_pad(str(r['名稱']), 12)}"
+                  f"{float(r['收盤']):>9.2f}  "
+                  f"{chg_color}{chg:>+7.2f}%{RESET}  "
+                  f"{vol_field}  "
+                  f"{dir_icon} [{sig_str}]  命中{r['命中數']}{combo_str}")
 
-    print_table(df, cols)
+    if not any_printed:
+        print("  （今日無股票達到命中門檻）")
+
     print("═"*100)
-    print("  原有：A多=均線突破+爆量  AS空=均線死亡  B多=跳空↑  BS空=跳空↓")
-    print("        C多=RSI超賣  CS空=RSI超買  D多=突破前高  DS空=跌破前低")
-    print("        E多=強勢連漲  ES空=弱勢連跌")
-    print("  新增：F多=均量擴張↑  FS空=均量萎縮↓  G多=縮後爆量↑  GS空=縮後爆量↓")
-    print("        H多=鎚子K  HS空=射擊之星  I多=吞噬陽  IS空=吞噬陰")
+    print("  訊號：A=均線突破  B=跳空↑  C=RSI超賣  D=突破前高  E=強勢連漲  "
+          "F=均量擴張  G=縮後上漲  H=鎚子K  I=吞噬陽")
+    print("        空方加 S 後綴（AS/BS/CS...）")
     print("═"*100 + "\n")
 
 

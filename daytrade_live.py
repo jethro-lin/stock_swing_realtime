@@ -566,9 +566,9 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
         "AS": bool(ma5 < ma20 and vol_ratio >= vol_mult and chg_pct < 0),
         "B":  bool(gap_pct >= 2.0 and chg_pct > 0),                   # ★ 移除 1.3x
         "BS": bool(gap_pct <= -2.0 and vol_ratio >= 1.3 and chg_pct < 0),
-        "C":  bool(rsi_prv < 35 and rsi_now > rsi_prv and price > ma5),
+        "C":  bool(rsi_prv < 30 and rsi_now > rsi_prv and price > ma5),
         "CS": bool(rsi_prv > 65 and rsi_now < rsi_prv and price < ma5),
-        "D":  bool(price > high5),                                     # ★ 移除 vol_ratio
+        "D":  bool(price > high5 and ma5 > ma20),                       # ★ 需多頭排列才有效突破
         "DS": bool(price < low5 and vol_ratio >= vol_mult),
         "E":  bool(three_up and ma5 > ma10 > ma20 and chg_pct > 0),
         "ES": bool(three_dn and ma5 < ma10 < ma20 and chg_pct < 0),
@@ -588,7 +588,7 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
         "K":  bool(prev_close <= base["bb_lower_p"] and price > base["bb_lower_t"]),
         "KS": bool(prev_close >= base["bb_upper_p"] and price < base["bb_upper_t"]),
         # ── L/LS：KD 超賣黃金交叉 / 超買死亡交叉 ────
-        "L":  bool(base["kk_t"] < 30 and base["kk_p"] < base["kd_p"] and base["kk_t"] > base["kd_t"]),
+        "L":  bool(base["kk_t"] < 20 and base["kk_p"] < base["kd_p"] and base["kk_t"] > base["kd_t"]),
         "LS": bool(base["kk_t"] > 70 and base["kk_p"] > base["kd_p"] and base["kk_t"] < base["kd_t"]),
         # ── M/MS：威廉%R 超賣反彈 / 超買回落 ────────
         "M":  bool(base["wr_p"] < -80 and base["wr_t"] > base["wr_p"] and chg_pct > 0),
@@ -606,8 +606,8 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
         "Q":  bool(inside_breakout),
         "QS": bool(inside_breakdown),
         # ── R/RS：BIAS 超跌反彈 / 超漲回落 ──────────
-        "R":  bool(bias < -8  and chg_pct > 0),
-        "RS": bool(bias > +8  and chg_pct < 0),
+        "R":  bool(bias < -10 and chg_pct > 0),
+        "RS": bool(bias > +10 and chg_pct < 0),
         # ── B2：大跳空(≥5%) + 量比≥0.8x ─────────────
         "B2": bool(gap_pct >= 5.0 and vol_ratio >= 0.8 and chg_pct > 0),
     }
@@ -767,10 +767,20 @@ class LiveQuote:
         def _on_tick(exchange, tick):
             code  = tick.code
             price = float(tick.close)
+            tick_time = tick.datetime.time() if hasattr(tick.datetime, "time") else datetime.time(0, 0)
             with self._lock:
                 q = self._quotes.get(code, {})
                 prev = q.get("prev_close", 0)
-                chg  = round((price - prev) / prev * 100, 2) if prev else 0
+                # 開盤前（09:00 前）漲跌幅以 open 相對昨收計算；
+                # 若尚無開盤價（盤前撮合未完成），顯示 0.00%
+                if tick_time < TRADE_START:
+                    open_p = q.get("open", 0)
+                    if open_p and prev:
+                        chg = round((open_p - prev) / prev * 100, 2)
+                    else:
+                        chg = 0.0
+                else:
+                    chg = round((price - prev) / prev * 100, 2) if prev else 0
                 self._quotes[code] = {
                     **q,
                     "price":       price,
@@ -793,18 +803,30 @@ class LiveQuote:
             try:
                 snaps = self._api.snapshots(contracts)
                 for s in snaps:
-                    prev_cl = float(s.close) - float(s.change_price)
+                    prev_cl  = float(s.close) - float(s.change_price)
+                    open_p   = float(s.open)
+                    snap_now = datetime.datetime.now().time()
+                    # 開盤前 Shioaji 的 change_rate 以昨收為基準但 close 仍為昨收，
+                    # 若有 open（盤前撮合有成交）則改用 open 對昨收計算漲跌幅，
+                    # 否則顯示 0.00%（不顯示錯誤的昨日漲跌幅）
+                    if snap_now < TRADE_START:
+                        if open_p and prev_cl:
+                            chg_pct_snap = round((open_p - prev_cl) / prev_cl * 100, 2)
+                        else:
+                            chg_pct_snap = 0.0
+                    else:
+                        chg_pct_snap = round(float(s.change_rate), 2)
                     with self._lock:
                         contract = self._api.Contracts.Stocks.get(s.code)
                         name = getattr(contract, "name", s.code) if contract else s.code
                         self._quotes[s.code] = {
                             "name":       name,
                             "price":      float(s.close),
-                            "open":       float(s.open),
+                            "open":       open_p,
                             "high":       float(s.high),
                             "low":        float(s.low),
                             "prev_close": prev_cl,
-                            "chg_pct":    round(float(s.change_rate), 2),
+                            "chg_pct":    chg_pct_snap,
                             "total_vol":  float(s.total_volume),
                             "yesterday_vol": float(s.yesterday_volume or 0),
                             "time":       "",
@@ -918,53 +940,71 @@ def render(positions: list, signals: dict, scan_n: int,
         display = [c for c in display if c in pos_df.columns]
         print_table(pos_df, display)
 
-    # ── 訊號清單 ─────────────────────────────
-    col_map = {
-        "A":"A多",  "AS":"AS空", "B":"B多",  "BS":"BS空",
-        "C":"C多",  "CS":"CS空", "D":"D多",  "DS":"DS空",
-        "E":"E多",  "ES":"ES空", "F":"F多",  "FS":"FS空",
-        "G":"G多",  "GS":"GS空", "H":"H多",  "HS":"HS空",
-        "I":"I多",  "IS":"IS空", "J":"J多",  "JS":"JS空",
-        "K":"K多",  "KS":"KS空", "L":"L多",  "LS":"LS空",
-        "M":"M多",  "MS":"MS空", "N":"N多",  "NS":"NS空",
-        "O":"O多",  "OS":"OS空", "P":"P多",  "PS":"PS空",
-        "Q":"Q多",  "QS":"QS空", "R":"R多",  "RS":"RS空",
-        "B2":"B2多",
-    }
-    rows = []
+    # ── 訊號清單（文字版，按價位區間分層） ──────
+    # 價位分層定義（與 swing_trade_v2.py 一致）
+    TIERS = [
+        ("低價  <  50", lambda p: p < 50),
+        ("中低 50~100", lambda p: 50 <= p < 100),
+        ("中價 100~300", lambda p: 100 <= p < 300),
+        ("高價 300~1000", lambda p: 300 <= p < 1000),
+        ("超高  > 1000", lambda p: p >= 1000),
+    ]
+
+    # 收集所有通過門檻的標的
+    hit_items = []
     for code, info in signals.items():
         sigs = info["sigs"]
         q    = info["quote"]
-        long_hit  = sum(1 for k,v in sigs.items() if v and not k.endswith("S"))
-        short_hit = sum(1 for k,v in sigs.items() if v and k.endswith("S"))
-        if max(long_hit, short_hit) < min_hit:
+        long_sigs  = [k for k, v in sigs.items() if v and not k.endswith("S")]
+        short_sigs = [k for k, v in sigs.items() if v and k.endswith("S")]
+        long_hit  = len(long_sigs)
+        short_hit = len(short_sigs)
+        total_hit = max(long_hit, short_hit)
+        if total_hit < min_hit:
             continue
-        # 建立欄位 dict，B多若同時觸發 B2 則標 ★（缺口≥5%，EV 更強）
-        sig_cells = {col_map[k]: "✅" if v else "❌" for k, v in sigs.items()}
-        if sigs.get("B") and sigs.get("B2"):
-            sig_cells["B多"] = "✅★"   # B2 強化訊號（跳空≥5%，EV 高 0.4~0.8%）
-        rows.append({
-            "代號":      code,
-            "名稱":      q.get("name", code),
-            "現價":      round(q.get("price", 0), 2),
-            "漲跌幅(%)": f"{q.get('chg_pct', 0):+.2f}%",
-            "成交量(張)": int(q.get("total_vol", 0)),
-            **sig_cells,
-            "命中數":    max(long_hit, short_hit),
-            "更新":      q.get("time", ""),
+        price   = round(q.get("price", 0), 2)
+        chg_pct = q.get("chg_pct", 0)
+        # 判斷主方向
+        if long_hit >= short_hit:
+            direction = "多"
+            active_sigs = long_sigs
+        else:
+            direction = "空"
+            active_sigs = short_sigs
+        # B2 強化標記
+        sig_str = " ".join(active_sigs)
+        if "B" in active_sigs and "B2" in active_sigs:
+            sig_str = sig_str.replace("B2", "B2★")
+        hit_items.append({
+            "code":      code,
+            "name":      q.get("name", code),
+            "price":     price,
+            "chg_pct":  chg_pct,
+            "direction": direction,
+            "sigs":      sig_str,
+            "hit":       total_hit,
+            "time":      q.get("time", ""),
         })
 
-    if rows:
-        sig_df = pd.DataFrame(rows).sort_values(["命中數","漲跌幅(%)"], ascending=[False,False])
-        print(f"\n  📡 訊號清單（{len(sig_df)} 檔通過門檻）")
-        display_cols = ["代號","名稱","現價","漲跌幅(%)","成交量(張)",
-                        "A多","AS空","B多","BS空","C多","CS空","D多","DS空","E多","ES空",
-                        "F多","FS空","G多","GS空","H多","HS空","I多","IS空",
-                        "J多","JS空","K多","KS空","L多","LS空","M多","MS空",
-                        "N多","NS空","O多","OS空","P多","PS空","Q多","QS空",
-                        "R多","RS空","B2多",
-                        "命中數","更新"]
-        print_table(sig_df, display_cols)
+    total_hit_count = len(hit_items)
+    if total_hit_count > 0:
+        print(f"\n  📡 訊號清單（{total_hit_count} 檔通過門檻 ≥{min_hit}）")
+        for tier_label, tier_filter in TIERS:
+            tier_items = [x for x in hit_items if tier_filter(x["price"])]
+            if not tier_items:
+                continue
+            # 同層內依現價排列
+            tier_items.sort(key=lambda x: x["price"])
+            print(f"\n  ┌─ {tier_label} ({'共' + str(len(tier_items)) + '檔'}) ─")
+            for x in tier_items:
+                chg = x["chg_pct"]
+                chg_color = "\033[31m" if chg > 0 else ("\033[32m" if chg < 0 else "")
+                dir_icon = "▲" if x["direction"] == "多" else "▽"
+                time_str = f"  [{x['time']}]" if x["time"] else ""
+                print(f"  │  {_pad(x['code'], 7)}{_pad(x['name'], 12)}"
+                      f"{x['price']:>9.2f}  "
+                      f"{chg_color}{chg:>+7.2f}%{RESET}  "
+                      f"{dir_icon} [{x['sigs']}]  命中{x['hit']}{time_str}")
     else:
         print(f"\n  ─ 目前無股票達到命中門檻 ≥{min_hit}")
 
@@ -983,15 +1023,11 @@ def render(positions: list, signals: dict, scan_n: int,
             print(f"     {a}")
 
     print("\n" + "═"*100)
-    print("  策略：A多=均線突破  AS空=均線死亡+爆量  B多=跳空↑  BS空=跳空↓+爆量  "
-          "C多=RSI超賣  CS空=RSI超買  D多=突破前高  DS空=跌破前低  E多=強勢連漲  ES空=弱勢連跌")
-    print("        F多=均量擴張  FS空=均量萎縮+爆量  G多=縮後上漲  GS空=縮後爆跌  "
-          "H多=鎚子K   HS空=射擊之星  I多=吞噬陽線  IS空=吞噬陰線")
-    print("        J多=MACD黃叉  JS空=MACD死叉  K多=布林下軌  KS空=布林上軌  "
-          "L多=KD<30黃叉  LS空=KD>70死叉  M多=威廉超賣  MS空=威廉超買")
-    print("        N多=MA回測站回  NS空=MA回測跌破  O多=晨星  OS空=黃昏星  "
-          "P多=紅三兵  PS空=黑三兵  Q多=IB突破  QS空=IB跌破  R多=BIAS超跌  RS空=BIAS超漲  B2多=大跳空≥5%")
-    print("  ★ 標記：B多顯示 ✅★ 表示同時觸發 B2（缺口≥5%），此時配合趨勢策略 EV 可提升 +0.4~+0.8%")
+    print("  策略：A=均線突破  B=跳空↑  B2=大跳空≥5%★  C=RSI<30  D=突破前高(多頭排列)  "
+          "E=強勢連漲  F=均量擴張  G=縮後上漲")
+    print("        H=鎚子K  I=吞噬陽線  J=MACD黃叉  K=布林下軌  L=KD<20黃叉  "
+          "M=威廉超賣  N=MA回測站回  O=晨星")
+    print("        P=紅三兵  Q=IB突破  R=BIAS<-10%反彈  空方加 S 後綴（AS/BS/CS...）")
     print("  （Ctrl+C 停止）")
 
 
