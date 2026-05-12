@@ -30,10 +30,8 @@ struct MainView: View {
 
     private var groups: [PriceGroup] { PriceGroup.allCases }
 
-    private var tabItems: [SignalResult] {
-        let group = groups[selectedTab]
-        if group == .all { return vm.scanResults }
-        return vm.scanResults.filter { $0.priceGroup == group }
+    private func items(for group: PriceGroup) -> [SignalResult] {
+        group == .all ? vm.scanResults : vm.scanResults.filter { $0.priceGroup == group }
     }
 
     var body: some View {
@@ -54,25 +52,37 @@ struct MainView: View {
                     .font(.system(size: 14))
                 Spacer()
             } else {
-                // Tab bar
                 tabBar
                 Divider()
-
-                // List
-                if tabItems.isEmpty {
-                    Spacer()
-                    Text("此價位區間無標的").foregroundColor(.gray).font(.system(size: 14))
-                    Spacer()
-                } else {
-                    listHeader
-                    Divider()
-                    List(tabItems) { result in
-                        StockRowView(result: result, onTap: { vm.openChart(result) })
-                            .listRowInsets(EdgeInsets())
-                            .listRowSeparatorTint(Color(white: 0.93))
+                listHeader
+                Divider()
+                // TabView with page style enables horizontal swipe between tabs
+                TabView(selection: $selectedTab) {
+                    ForEach(Array(groups.enumerated()), id: \.offset) { idx, group in
+                        let pageItems = items(for: group)
+                        Group {
+                            if pageItems.isEmpty {
+                                VStack {
+                                    Spacer()
+                                    Text("此價位區間無標的")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 14))
+                                    Spacer()
+                                }
+                            } else {
+                                List(pageItems) { result in
+                                    StockRowView(result: result, onTap: { vm.openChart(result) })
+                                        .listRowInsets(EdgeInsets())
+                                        .listRowSeparatorTint(Color(white: 0.93))
+                                }
+                                .listStyle(.plain)
+                            }
+                        }
+                        .tag(idx)
                     }
-                    .listStyle(.plain)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(.easeInOut(duration: 0.2), value: selectedTab)
             }
         }
         .sheet(item: $vm.chartTarget) { result in
@@ -171,9 +181,7 @@ struct MainView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { idx, group in
-                    let count = group == .all
-                        ? vm.scanResults.count
-                        : vm.scanResults.filter { $0.priceGroup == group }.count
+                    let count = items(for: group).count
                     let label = count > 0 ? "\(group.rawValue) (\(count))" : group.rawValue
                     Button {
                         selectedTab = idx

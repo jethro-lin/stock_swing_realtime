@@ -138,6 +138,22 @@ class TwseApiService(
 
         val nowTpe = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Taipei"))
         val isAfterClose = nowTpe.hour > 14 || (nowTpe.hour == 14 && nowTpe.minute >= 30)
+
+        // 若快取檔案寫入日期與今日不同，且現在已過 09:00（市場開盤），視為過時強制重抓
+        if (nowTpe.hour >= 9) {
+            val fileMtime = file.lastModified()
+            if (fileMtime > 0) {
+                val fileDate = java.time.Instant.ofEpochMilli(fileMtime)
+                    .atZone(java.time.ZoneId.of("Asia/Taipei"))
+                    .toLocalDate()
+                val today = nowTpe.toLocalDate()
+                if (fileDate < today) {
+                    Log.d(TAG, "cache[$code] written on $fileDate, today=$today, market open -> refetch")
+                    return null  // 前一日快取，市場已開盤，強制重抓
+                }
+            }
+        }
+
         if (isAfterClose) {
             val today = nowTpe.toLocalDate()
             if (bars.none { it.date == today }) {
@@ -149,17 +165,27 @@ class TwseApiService(
                     Log.d(TAG, "cache[$code] stale: lastBar=${bars.last().date}, fileDate=$fileDate -> refetch")
                     return null
                 }
-                // fileDate == today：看寫入時間是否已在收盤後
-                // 若是盤中寫入（< 14:30），代表當時尚無今日 K 棒，仍需盤後補抓
+                // fileDate == today：兩段門檻判斷
+                // ①  < 14:30 → 盤中寫入，今日收盤後需重抓
+                // ② 14:30 ~ 15:00 → 收盤後補抓視窗，TWSE 可能尚未發佈今日資料，仍需重試
+                // ③  ≥ 15:00 → TWSE 正常應已發佈，若仍無今日棒則確認為假日，接受舊資料
                 val closeThresholdMs = today
                     .atTime(14, 30)
+                    .atZone(java.time.ZoneId.of("Asia/Taipei"))
+                    .toInstant().toEpochMilli()
+                val confirmDeadlineMs = today
+                    .atTime(15, 0)
                     .atZone(java.time.ZoneId.of("Asia/Taipei"))
                     .toInstant().toEpochMilli()
                 if (fileMtime < closeThresholdMs) {
                     Log.d(TAG, "cache[$code] written today before close -> refetch post-close")
                     return null
                 }
-                Log.d(TAG, "cache[$code] afterClose no today bar, file written today after-close (holiday) -> accept ${bars.size} bars")
+                if (fileMtime < confirmDeadlineMs) {
+                    Log.d(TAG, "cache[$code] written today 14:30~15:00, no today bar -> TWSE may lag, retry")
+                    return null
+                }
+                Log.d(TAG, "cache[$code] afterClose ≥15:00 no today bar → confirmed holiday, accept ${bars.size} bars")
             }
         }
         Log.d(TAG, "cache[$code] hit: ${bars.size} bars, last=${bars.last().date}")
@@ -241,7 +267,26 @@ class TwseApiService(
             // 只有真正取得新資料才存檔（更新 mtime）；
             // 若 newBars 為空代表 API 暫時失敗，保留舊 mtime=0 讓下次繼續重試，
             // 避免存回舊資料後 mtime=today 誤觸假日邏輯而卡死。
-            if (result.isNotEmpty() && (newBars.isNotEmpty() || stale == null)) saveCache(code, result)
+            if (result.isNotEmpty() && (newBars.isNotEmpty() || stale == null)) {
+                saveCache(code, result)
+
+                // 收盤後補抓但仍無今日K棒：TWSE 可能尚未發佈（收盤後約 30 分鐘才更新）。
+                // 15:00 前：設 mtime=1（過期哨兵）強制下次掃描重試；
+                // 15:00 後無今日棒 → 確認為假日，mtime 保持「今日收盤後」讓假日邏輯接受。
+                val nowTpePost = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Taipei"))
+                val isAfterClosePost = nowTpePost.hour > 14 ||
+                    (nowTpePost.hour == 14 && nowTpePost.minute >= 30)
+                val hasTodayBar = result.any { it.date == today }
+                val confirmDeadlineMs = today
+                    .atTime(15, 0)
+                    .atZone(java.time.ZoneId.of("Asia/Taipei"))
+                    .toInstant().toEpochMilli()
+                if (isAfterClosePost && !hasTodayBar &&
+                    System.currentTimeMillis() < confirmDeadlineMs) {
+                    kbarCacheFile(code)?.setLastModified(1L)
+                    Log.d(TAG, "cache[$code] post-close window, no today bar → stale sentinel, will retry")
+                }
+            }
             result
         }
 

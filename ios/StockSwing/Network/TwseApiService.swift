@@ -52,6 +52,22 @@ actor TwseApiService {
         let comps   = cal.dateComponents([.hour, .minute, .day, .month, .year], from: nowTpe)
         let isAfterClose = (comps.hour! > 14) || (comps.hour! == 14 && comps.minute! >= 30)
 
+        // 若快取檔案寫入日期與今日不同，且現在已過 09:00（市場開盤），視為過時強制重抓
+        if comps.hour! >= 9 {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+               let mtime = attrs[.modificationDate] as? Date
+            {
+                let todayComps = cal.dateComponents([.year, .month, .day], from: nowTpe)
+                let mtimeComps = cal.dateComponents([.year, .month, .day], from: mtime)
+                let cacheIsFromPreviousDay = mtimeComps.year  != todayComps.year
+                                         || mtimeComps.month != todayComps.month
+                                         || mtimeComps.day   != todayComps.day
+                if cacheIsFromPreviousDay {
+                    return nil  // 前一日快取，市場已開盤，強制重抓
+                }
+            }
+        }
+
         if isAfterClose {
             let todayComps = cal.dateComponents([.year, .month, .day], from: nowTpe)
             let lastBar    = bars.last!
@@ -71,14 +87,25 @@ actor TwseApiService {
                     {
                         return nil  // stale
                     }
-                    // written today — check if before close
+                    // 三段門檻：
+                    // ①  < 14:30 → 盤中寫入，今日收盤後需重抓
+                    // ② 14:30~15:00 → 收盤後補抓視窗，TWSE 可能尚未發佈今日資料，仍需重試
+                    // ③  ≥ 15:00 → 確認為假日，接受舊資料
                     var closeThreshComps = todayComps
                     closeThreshComps.hour = 14; closeThreshComps.minute = 30
+                    var confirmComps = todayComps
+                    confirmComps.hour = 15; confirmComps.minute = 0
                     if let closeThresh = cal.date(from: closeThreshComps),
                        mtime < closeThresh
                     {
                         return nil  // written before close, needs post-close refetch
                     }
+                    if let confirmDeadline = cal.date(from: confirmComps),
+                       mtime < confirmDeadline
+                    {
+                        return nil  // 14:30~15:00 視窗：TWSE 可能仍在更新，重試
+                    }
+                    // ≥ 15:00 確認為假日，接受
                 } else {
                     return nil
                 }
@@ -144,6 +171,26 @@ actor TwseApiService {
 
         if !result.isEmpty && (!newBars.isEmpty || stale == nil) {
             saveCache(code: code, bars: result)
+
+            // 收盤後補抓但仍無今日K棒：TWSE 可能尚未發佈（收盤後約 30 分鐘才更新）。
+            // 15:00 前：設 mtime=epoch（過期哨兵）強制下次掃描重試；
+            // 15:00 後無今日棒 → 確認為假日，mtime 保持讓假日邏輯接受。
+            var cal2 = Calendar(identifier: .gregorian)
+            cal2.timeZone = tpeZone
+            let nowTpe2  = Date()
+            let comps2   = cal2.dateComponents([.hour, .minute], from: nowTpe2)
+            let isAfterClose2 = (comps2.hour! > 14) ||
+                                 (comps2.hour! == 14 && comps2.minute! >= 30)
+            let hasTodayBar = result.contains { cal2.isDate($0.date, inSameDayAs: nowTpe2) }
+            var deadlineComps = cal2.dateComponents([.year, .month, .day], from: nowTpe2)
+            deadlineComps.hour = 15; deadlineComps.minute = 0; deadlineComps.second = 0
+            if let deadline = cal2.date(from: deadlineComps),
+               isAfterClose2 && !hasTodayBar && nowTpe2 < deadline {
+                let file = cacheFile(code: code)
+                try? FileManager.default.setAttributes(
+                    [.modificationDate: Date(timeIntervalSince1970: 0)],
+                    ofItemAtPath: file.path)
+            }
         }
         return result
     }

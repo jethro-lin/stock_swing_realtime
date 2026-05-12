@@ -17,6 +17,8 @@ data class StrategyBase(
     val ma5Dir:  Int,
     val ma10Dir: Int,
     val ma20Dir: Int,
+    // MA20 趨勢（10日斜率）：1=上升趨勢, -1=下降趨勢, 0=橫盤
+    val ma20Trend: Int,
     // RSI
     val rsiNow: Double,
     val rsiPrv: Double,

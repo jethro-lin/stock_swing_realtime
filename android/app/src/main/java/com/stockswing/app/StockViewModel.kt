@@ -304,7 +304,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
 
                     val hitPresets: Map<String, List<String>>
                     if (isCustomMode) {
-                        val hit = sigs.activeSignals.filter { it in customSignals }
+                        val hit = sigs.matchedCustomLabels(customSignals)
                         if (hit.isEmpty()) return@mapNotNull null
                         hitPresets = mapOf("custom" to hit)
                     } else {
@@ -327,6 +327,7 @@ class StockViewModel(app: Application) : AndroidViewModel(app) {
                         ma5Dir     = base.ma5Dir,
                         ma10Dir    = base.ma10Dir,
                         ma20Dir    = base.ma20Dir,
+                        ma20Trend  = base.ma20Trend,
                     )
                 }.sortedWith(
                     compareByDescending<SignalResult> { it.totalComboHits }

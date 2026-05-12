@@ -59,6 +59,18 @@ object StrategyEngine {
         val ma10Dir = dir(10)
         val ma20Dir = dir(20)
 
+        // MA20 趨勢：比較 MA20今日 vs MA20[10日前]，差異 < 1% 視為橫盤
+        val ma20Trend: Int = if (n >= 30) {
+            val ma20Today  = closes.copyOfRange(n - 20, n).average()
+            val ma20_10ago = closes.copyOfRange(n - 30, n - 10).average()
+            val pct = if (ma20_10ago != 0.0) (ma20Today - ma20_10ago) / ma20_10ago else 0.0
+            when {
+                abs(pct) < 0.01 -> 0   // 橫盤
+                pct > 0         -> 1   // 上升
+                else            -> -1  // 下降
+            }
+        } else 0
+
         // ── RSI ──────────────────────────────────────────────────────
         val rsiArr = TechnicalIndicators.rsi(closes)
         val rsiNow = rsiArr[0]; val rsiPrv = rsiArr[1]
@@ -126,6 +138,7 @@ object StrategyEngine {
             volExpand = volExpand, volShrink = volShrink, tideShrink = tideShrink,
             ma5 = ma5, ma10 = ma10, ma20 = ma20,
             ma5Dir = ma5Dir, ma10Dir = ma10Dir, ma20Dir = ma20Dir,
+            ma20Trend = ma20Trend,
             rsiNow = rsiNow, rsiPrv = rsiPrv,
             high5 = high5, low5 = low5,
             threeUp = threeUp, threeDn = threeDn,
@@ -218,54 +231,58 @@ object StrategyEngine {
         val maBearAlign = base.ma5 < base.ma10 && base.ma10 < base.ma20
 
         return StrategySignals(
-            // A/AS — 均線突破/死亡（多方移除爆量條件）
+            // A/AS — 均線突破/死亡
             A  = base.ma5 > base.ma20 && chgPct > 0,
             AS = base.ma5 < base.ma20 && volRatio >= volMult && chgPct < 0,
             // B/BS — 跳空缺口
             B  = gapPct >= 2.0 && chgPct > 0,
             BS = gapPct <= -2.0 && volRatio >= 1.3 && chgPct < 0,
-            // C/CS — RSI 超賣/超買
+            // C/CS — RSI 超賣/超買（均值回歸訊號，不加趨勢過濾）
             C  = base.rsiPrv < 35 && base.rsiNow > base.rsiPrv && price > base.ma5,
             CS = base.rsiPrv > 65 && base.rsiNow < base.rsiPrv && price < base.ma5,
-            // D/DS — 突破/跌破前高低
-            D  = price > base.high5,
+            // D/DS — 突破/跌破前高低（D 多：需 MA5 > MA20 避免假突破）
+            D  = price > base.high5 && base.ma5 > base.ma20,
             DS = price < base.low5 && volRatio >= volMult,
-            // E/ES — 強勢連漲/弱勢連跌
+            // E/ES — 強勢連漲/弱勢連跌（需嚴格三線多頭/空頭排列）
             E  = base.threeUp && maBullAlign && chgPct > 0,
             ES = base.threeDn && maBearAlign && chgPct < 0,
             // F/FS — 均量擴張/萎縮
             F  = base.volExpand && chgPct > 0,
             FS = base.volShrink && volRatio >= volMult && chgPct < 0,
-            // G/GS — 縮量後上漲/爆跌
-            G  = base.tideShrink && chgPct > 0,
-            GS = base.tideShrink && volRatio >= volMult && chgPct < 0,
-            // H/HS — 鎚子K/射擊之星
-            H  = hammer, HS = shootStar,
+            // G/GS — 縮量後上漲/爆跌（需 MA 排列確認趨勢）
+            G  = base.tideShrink && chgPct > 0 && base.ma5 > base.ma20,
+            GS = base.tideShrink && volRatio >= volMult && chgPct < 0 && base.ma5 < base.ma20,
+            // H/HS — 鎚子K/射擊之星（鎚子需在 MA20 下方超賣區；射擊星需在 MA20 上方超買區）
+            H  = hammer    && price < base.ma20,
+            HS = shootStar && price > base.ma20,
             // I/IS — 吞噬陽線/陰線
             I  = engulfBull, IS = engulfBear,
-            // J/JS — MACD 黃金/死亡交叉
-            J  = base.macdP < base.msigP && base.macdT > base.msigT && chgPct > 0,
-            JS = base.macdP > base.msigP && base.macdT < base.msigT && chgPct < 0,
-            // K/KS — 布林下軌反彈/上軌反壓
+            // J/JS — MACD 黃金/死亡交叉（需 MA5/MA20 排列確認趨勢）
+            J  = base.macdP < base.msigP && base.macdT > base.msigT && chgPct > 0 && base.ma5 > base.ma20,
+            JS = base.macdP > base.msigP && base.macdT < base.msigT && chgPct < 0 && base.ma5 < base.ma20,
+            // K/KS — 布林下軌反彈/上軌反壓（均值回歸訊號，不加趨勢過濾）
             K  = prevClose <= base.bbLowerP && price > base.bbLowerT,
             KS = prevClose >= base.bbUpperP && price < base.bbUpperT,
-            // L/LS — KD 超賣/超買交叉
-            L  = base.kkT < 30 && base.kkP < base.kdP && base.kkT > base.kdT,
+            // L/LS — KD 超賣/超買交叉（均值回歸訊號，不加趨勢過濾；KD<20 EV 0.09→0.19%）
+            L  = base.kkT < 20 && base.kkP < base.kdP && base.kkT > base.kdT,
             LS = base.kkT > 70 && base.kkP > base.kdP && base.kkT < base.kdT,
-            // M/MS — Williams %R 超賣/超買
+            // M/MS — Williams %R 超賣/超買（均值回歸訊號，不加趨勢過濾）
             M  = base.wrP < -80 && base.wrT > base.wrP && chgPct > 0,
             MS = base.wrP > -20 && base.wrT < base.wrP && chgPct < 0,
             // N/NS — MA 排列回測站回/跌破
             N  = maBullAlign && prevClose < base.ma5 && price >= base.ma5,
             NS = maBearAlign && prevClose > base.ma5 && price <= base.ma5,
-            // O/OS — 晨星/黃昏之星
-            O = morningStar, OS = eveningStar,
-            // P/PS — 紅三兵/黑三兵
-            P = threeSoldiers, PS = threeCrows,
-            // Q/QS — Inside Bar 突破/跌破
-            Q = insideBreakout, QS = insideBreakdown,
-            // R/RS — BIAS 超跌/超漲
-            R  = bias < -8.0 && chgPct > 0,
+            // O/OS — 晨星/黃昏之星（晨星需在 MA20 下方；黃昏星需在 MA20 上方）
+            O  = morningStar && price < base.ma20,
+            OS = eveningStar && price > base.ma20,
+            // P/PS — 紅三兵/黑三兵（需 MA5/MA20 排列確認趨勢）
+            P  = threeSoldiers && base.ma5 > base.ma20,
+            PS = threeCrows    && base.ma5 < base.ma20,
+            // Q/QS — Inside Bar 突破/跌破（需 MA5/MA20 排列確認趨勢）
+            Q  = insideBreakout  && base.ma5 > base.ma20,
+            QS = insideBreakdown && base.ma5 < base.ma20,
+            // R/RS — BIAS 超跌/超漲（均值回歸訊號，不加趨勢過濾；BIAS<-10 EV 改善）
+            R  = bias < -10.0 && chgPct > 0,
             RS = bias > 8.0  && chgPct < 0,
             // B2 — 大跳空(≥5%) + 量比≥0.8x
             B2 = gapPct >= 5.0 && volRatio >= 0.8 && chgPct > 0,

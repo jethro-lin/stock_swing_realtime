@@ -37,10 +37,10 @@ struct StockRowView: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(result.code)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
                     Text(result.name)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 17, weight: .medium))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -63,9 +63,10 @@ struct StockRowView: View {
             // MA row
             if result.ma5 > 0 {
                 MARowView(price: result.quote.price,
-                          ma5: result.ma5,   ma5Dir: result.ma5Dir,
-                          ma10: result.ma10, ma10Dir: result.ma10Dir,
-                          ma20: result.ma20, ma20Dir: result.ma20Dir)
+                          ma5: result.ma5,   ma5Dir:   result.ma5Dir,
+                          ma10: result.ma10, ma10Dir:  result.ma10Dir,
+                          ma20: result.ma20, ma20Dir:  result.ma20Dir,
+                          ma20Trend: result.ma20Trend)
             }
 
             // Signal chips
@@ -142,13 +143,29 @@ struct ComboChipView: View {
 }
 
 struct MARowView: View {
-    let price:   Double
-    let ma5:     Double; let ma5Dir:  Int
-    let ma10:    Double; let ma10Dir: Int
-    let ma20:    Double; let ma20Dir: Int
+    let price:     Double
+    let ma5:       Double; let ma5Dir:   Int
+    let ma10:      Double; let ma10Dir:  Int
+    let ma20:      Double; let ma20Dir:  Int
+    var ma20Trend: Int = 0
 
     private func arrow(_ dir: Int) -> String {
         dir > 0 ? "↑" : dir < 0 ? "↓" : "→"
+    }
+
+    private var trendLabel: String {
+        switch ma20Trend {
+        case  1: return "上升▲"
+        case -1: return "下降▼"
+        default: return "橫盤─"
+        }
+    }
+    private var trendColor: Color {
+        switch ma20Trend {
+        case  1: return colorUp
+        case -1: return colorDown
+        default: return .gray
+        }
     }
 
     var body: some View {
@@ -170,6 +187,15 @@ struct MARowView: View {
                         .foregroundColor(color)
                 }
             }
+
+            // 趨勢標籤 chip
+            Text(trendLabel)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(trendColor)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(trendColor.opacity(0.12))
+                .cornerRadius(3)
         }
     }
 }

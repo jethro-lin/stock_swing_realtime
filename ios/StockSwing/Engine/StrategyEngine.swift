@@ -43,6 +43,17 @@ enum StrategyEngine {
         let ma10Dir = dir(10)
         let ma20Dir = dir(20)
 
+        // MA20 趨勢：比較 MA20今日 vs MA20[10日前]，差異 < 1% 視為橫盤
+        let ma20Trend: Int = {
+            guard n >= 30 else { return 0 }
+            let ma20Today  = Array(closes[(n - 20)...]).reduce(0, +) / 20.0
+            let ma20_10ago = Array(closes[(n - 30)..<(n - 10)]).reduce(0, +) / 20.0
+            guard ma20_10ago != 0 else { return 0 }
+            let pct = (ma20Today - ma20_10ago) / ma20_10ago
+            if abs(pct) < 0.01 { return 0 }
+            return pct > 0 ? 1 : -1
+        }()
+
         let rsi    = TechnicalIndicators.rsi(closes)
         let rsiNow = rsi.now; let rsiPrv = rsi.prev
 
@@ -89,6 +100,7 @@ enum StrategyEngine {
             volExpand: volExpand, volShrink: volShrink, tideShrink: tideShrink,
             ma5: ma5, ma10: ma10, ma20: ma20,
             ma5Dir: ma5Dir, ma10Dir: ma10Dir, ma20Dir: ma20Dir,
+            ma20Trend: ma20Trend,
             rsiNow: rsiNow, rsiPrv: rsiPrv,
             high5: high5, low5: low5,
             threeUp: threeUp, threeDn: threeDn,
@@ -172,32 +184,43 @@ enum StrategyEngine {
         s.AS = base.ma5 < base.ma20 && volRatio >= volMultiplier && chgPct < 0
         s.B  = gapPct >= 2.0 && chgPct > 0
         s.BS = gapPct <= -2.0 && volRatio >= 1.3 && chgPct < 0
+        // C/CS — 均值回歸，不加趨勢過濾
         s.C  = base.rsiPrv < 35 && base.rsiNow > base.rsiPrv && price > base.ma5
         s.CS = base.rsiPrv > 65 && base.rsiNow < base.rsiPrv && price < base.ma5
-        s.D  = price > base.high5
+        s.D  = price > base.high5 && base.ma5 > base.ma20
         s.DS = price < base.low5 && volRatio >= volMultiplier
         s.E  = base.threeUp && maBullAlign && chgPct > 0
         s.ES = base.threeDn && maBearAlign && chgPct < 0
         s.F  = base.volExpand && chgPct > 0
         s.FS = base.volShrink && volRatio >= volMultiplier && chgPct < 0
-        s.G  = base.tideShrink && chgPct > 0
-        s.GS = base.tideShrink && volRatio >= volMultiplier && chgPct < 0
-        s.H  = hammer;  s.HS = shootStar
+        s.G  = base.tideShrink && chgPct > 0 && base.ma5 > base.ma20
+        s.GS = base.tideShrink && volRatio >= volMultiplier && chgPct < 0 && base.ma5 < base.ma20
+        // H 需在 MA20 下方（超賣）；HS 需在 MA20 上方（超買）
+        s.H  = hammer    && price < base.ma20
+        s.HS = shootStar && price > base.ma20
         s.I  = engulfBull; s.IS = engulfBear
-        s.J  = base.macdP < base.msigP && base.macdT > base.msigT && chgPct > 0
-        s.JS = base.macdP > base.msigP && base.macdT < base.msigT && chgPct < 0
+        // J/JS — MA5/MA20 排列確認趨勢
+        s.J  = base.macdP < base.msigP && base.macdT > base.msigT && chgPct > 0 && base.ma5 > base.ma20
+        s.JS = base.macdP > base.msigP && base.macdT < base.msigT && chgPct < 0 && base.ma5 < base.ma20
+        // K/L/M — 均值回歸，不加趨勢過濾
         s.K  = prevClose <= base.bbLowerP && price > base.bbLowerT
         s.KS = prevClose >= base.bbUpperP && price < base.bbUpperT
-        s.L  = base.kkT < 30 && base.kkP < base.kdP && base.kkT > base.kdT
+        s.L  = base.kkT < 20 && base.kkP < base.kdP && base.kkT > base.kdT
         s.LS = base.kkT > 70 && base.kkP > base.kdP && base.kkT < base.kdT
         s.M  = base.wrP < -80 && base.wrT > base.wrP && chgPct > 0
         s.MS = base.wrP > -20 && base.wrT < base.wrP && chgPct < 0
         s.N  = maBullAlign && prevClose < base.ma5 && price >= base.ma5
         s.NS = maBearAlign && prevClose > base.ma5 && price <= base.ma5
-        s.O  = morningStar; s.OS = eveningStar
-        s.P  = threeSoldiers; s.PS = threeCrows
-        s.Q  = insideBreakout; s.QS = insideBreakdown
-        s.R  = bias < -8.0 && chgPct > 0
+        // O 需在 MA20 下方；OS 需在 MA20 上方
+        s.O  = morningStar  && price < base.ma20
+        s.OS = eveningStar  && price > base.ma20
+        // P/Q — MA5/MA20 排列確認趨勢
+        s.P  = threeSoldiers && base.ma5 > base.ma20
+        s.PS = threeCrows    && base.ma5 < base.ma20
+        s.Q  = insideBreakout  && base.ma5 > base.ma20
+        s.QS = insideBreakdown && base.ma5 < base.ma20
+        // R/RS — 均值回歸，不加趨勢過濾
+        s.R  = bias < -10.0 && chgPct > 0
         s.RS = bias > 8.0  && chgPct < 0
         s.B2 = gapPct >= 5.0 && volRatio >= 0.8 && chgPct > 0
         return s

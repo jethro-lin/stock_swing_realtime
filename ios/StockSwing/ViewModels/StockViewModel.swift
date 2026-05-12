@@ -216,7 +216,14 @@ class StockViewModel: ObservableObject {
                 )
                 let hitPresets: [String: [String]]
                 if isCustomMode {
-                    let hit = sigs.activeSignals.filter { customSignals.contains($0) }
+                    // 個別訊號命中
+                    let individualHits = sigs.activeSignals.filter { customSignals.contains($0) }
+                    // 組合命中（"A+B" 格式：所有子訊號都必須成立）
+                    let comboHits = customSignals
+                        .filter  { $0.contains("+") }
+                        .filter  { combo in combo.split(separator: "+").allSatisfy { sigs.flag(for: String($0)) } }
+                        .sorted()
+                    let hit = individualHits + comboHits
                     if hit.isEmpty { continue }
                     hitPresets = ["custom": hit]
                 } else {
@@ -232,7 +239,8 @@ class StockViewModel: ObservableObject {
                                             quote: entry.quote, signals: sigs,
                                             hitPresets: hitPresets,
                                             ma5: entry.base.ma5, ma10: entry.base.ma10, ma20: entry.base.ma20,
-                                            ma5Dir: entry.base.ma5Dir, ma10Dir: entry.base.ma10Dir, ma20Dir: entry.base.ma20Dir))
+                                            ma5Dir: entry.base.ma5Dir, ma10Dir: entry.base.ma10Dir, ma20Dir: entry.base.ma20Dir,
+                                            ma20Trend: entry.base.ma20Trend))
             }
 
             results.sort {

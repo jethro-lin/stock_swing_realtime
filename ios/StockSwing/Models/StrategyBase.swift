@@ -16,6 +16,8 @@ struct StrategyBase {
     let ma5Dir:  Int
     let ma10Dir: Int
     let ma20Dir: Int
+    // MA20 趨勢（10日斜率）：1=上升趨勢, -1=下降趨勢, 0=橫盤
+    let ma20Trend: Int
     // RSI
     let rsiNow: Double
     let rsiPrv: Double

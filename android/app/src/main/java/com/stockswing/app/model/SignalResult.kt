@@ -14,9 +14,11 @@ data class SignalResult(
     val ma5:     Double = 0.0,
     val ma10:    Double = 0.0,
     val ma20:    Double = 0.0,
-    val ma5Dir:  Int    = 0,
-    val ma10Dir: Int    = 0,
-    val ma20Dir: Int    = 0,
+    val ma5Dir:    Int    = 0,
+    val ma10Dir:   Int    = 0,
+    val ma20Dir:   Int    = 0,
+    // MA20 10日斜率趨勢：1=上升, -1=下降, 0=橫盤
+    val ma20Trend: Int    = 0,
 ) {
     val totalComboHits: Int get() = hitPresets.values.sumOf { it.size }
 }

@@ -61,6 +61,7 @@ struct ScanDialogView: View {
     @State private var useCustomDate = false
     @State private var customDate: Date? = nil
     @State private var showDatePicker = false
+    @State private var buildingCombo: [String] = []
 
     private let lastTradeDate: Date = lastCompleteTradeDate()
     private let tpeZone = TimeZone(identifier: "Asia/Taipei")!
@@ -102,11 +103,12 @@ struct ScanDialogView: View {
                 if scanMode == .preset {
                     Section("選擇組合") {
                         FlowChipGroup(
-                            items: Preset.allCases,
+                            items: Preset.allCases.filter { $0.hasCombo },
                             selected: { selectedPresets.contains($0) },
                             label: { $0.label },
                             chipColor: { preset in
-                                preset == .short3Lean ? redStrong.opacity(0.15) : greenStrong.opacity(0.15)
+                                // 台灣慣例：多方=紅, 空方=綠
+                                preset == .short3Lean ? greenStrong.opacity(0.15) : redStrong.opacity(0.15)
                             },
                             onTap: { preset in
                                 if selectedPresets.contains(preset) {
@@ -124,8 +126,10 @@ struct ScanDialogView: View {
                         HStack {
                             Text("多方訊號").font(.caption).foregroundColor(.gray)
                             Spacer()
-                            if !customSigs.isEmpty {
-                                Button("清除") { customSigs = [] }.font(.caption)
+                            if customSigs.contains(where: { !$0.contains("+") }) {
+                                Button("清除") {
+                                    customSigs = customSigs.filter { $0.contains("+") }
+                                }.font(.caption)
                             }
                         }
                         FlowChipGroup(
@@ -162,7 +166,76 @@ struct ScanDialogView: View {
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                     }
-                }
+                    // ── 自訂組合 ─────────────────────────────────────
+                    Section {
+                        HStack {
+                            Text("自訂組合").font(.caption).foregroundColor(.gray)
+                            Spacer()
+                            if !buildingCombo.isEmpty {
+                                Button("清除") { buildingCombo = [] }.font(.caption)
+                            }
+                        }
+
+                        // 訊號小選擇器（純代碼顯示，點選加入組合）
+                        FlowChipGroup(
+                            items: (longSignalDefs + shortSignalDefs).map { $0.0 },
+                            selected: { buildingCombo.contains($0) },
+                            label: { $0 },
+                            chipColor: { sig in
+                                sig.hasSuffix("S") && sig != "B2"
+                                    ? greenStrong.opacity(0.15)
+                                    : redStrong.opacity(0.15)
+                            },
+                            onTap: { sig in
+                                if buildingCombo.contains(sig) {
+                                    buildingCombo.removeAll { $0 == sig }
+                                } else {
+                                    buildingCombo.append(sig)
+                                }
+                            }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+
+                        // 新增按鈕（≥2 個訊號才顯示）
+                        if buildingCombo.count >= 2 {
+                            Button {
+                                customSigs.insert(buildingCombo.joined(separator: "+"))
+                                buildingCombo = []
+                            } label: {
+                                Label("新增  \(buildingCombo.joined(separator: "+"))",
+                                      systemImage: "plus")
+                                    .font(.system(size: 13))
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .listRowBackground(Color.clear)
+                        }
+
+                        // 已建立的組合 chips（可刪除）
+                        let existingCombos = Array(customSigs.filter { $0.contains("+") }).sorted()
+                        if !existingCombos.isEmpty {
+                            FlowLayout(spacing: 6) {
+                                ForEach(existingCombos, id: \.self) { combo in
+                                    HStack(spacing: 3) {
+                                        Text(combo)
+                                            .font(.system(size: 11, weight: .medium))
+                                        Button { customSigs.remove(combo) } label: {
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 8, weight: .bold))
+                                        }
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.accentColor.opacity(0.12))
+                                    .cornerRadius(12)
+                                    .foregroundColor(.accentColor)
+                                }
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        }
+                    }
+                } // end custom mode
 
                 Section("訊號日") {
                     HStack(spacing: 8) {

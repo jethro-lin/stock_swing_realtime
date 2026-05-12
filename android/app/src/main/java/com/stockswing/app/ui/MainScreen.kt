@@ -18,6 +18,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +44,7 @@ import com.google.android.gms.ads.LoadAdError
 import com.stockswing.app.BuildConfig
 import com.stockswing.app.StockViewModel
 import com.stockswing.app.model.Preset
+import com.stockswing.app.model.hasCombo
 import com.stockswing.app.model.SignalResult
 import java.time.DayOfWeek
 import java.time.Instant
@@ -136,8 +139,17 @@ fun MainScreen(vm: StockViewModel) {
     val chartTarget         by vm.chartTarget.collectAsState()
     val chartBars           by vm.chartBars.collectAsState()
 
-    var selectedTab         by remember { mutableIntStateOf(0) }
     val groups               = PriceGroup.entries
+    val pagerState           = rememberPagerState(pageCount = { groups.size })
+    var selectedTab          by remember { mutableIntStateOf(0) }
+    // Sync tab bar → pager
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) pagerState.animateScrollToPage(selectedTab)
+    }
+    // Sync pager swipe → tab bar
+    LaunchedEffect(pagerState.currentPage) {
+        selectedTab = pagerState.currentPage
+    }
 
     var showScanDialog      by remember { mutableStateOf(false) }
 
@@ -184,7 +196,7 @@ fun MainScreen(vm: StockViewModel) {
             )
         }
     ) { padding ->
-        Column(Modifier.padding(padding)) {
+        Column(Modifier.padding(padding).fillMaxSize()) {
 
             // ── 進度 / 狀態列 ─────────────────────────────────────────
             if (isLoading) {
@@ -267,14 +279,14 @@ fun MainScreen(vm: StockViewModel) {
 
             // ── 價位分頁 ──────────────────────────────────────────────
             ScrollableTabRow(
-                selectedTabIndex = selectedTab,
+                selectedTabIndex = pagerState.currentPage,
                 edgePadding      = 0.dp,
             ) {
                 groups.forEachIndexed { i, group ->
                     val count = if (group == PriceGroup.ALL) results.size
                                 else results.count { it.priceGroup() == group }
                     Tab(
-                        selected = selectedTab == i,
+                        selected = pagerState.currentPage == i,
                         onClick  = { selectedTab = i },
                         text     = {
                             Text(
@@ -285,21 +297,26 @@ fun MainScreen(vm: StockViewModel) {
                     )
                 }
             }
-
-            val tabItems = if (groups[selectedTab] == PriceGroup.ALL) results
-                           else results.filter { it.priceGroup() == groups[selectedTab] }
-
-            if (tabItems.isEmpty()) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Text("此價位區間無標的", color = Color.Gray, fontSize = 14.sp)
-                }
-            } else {
-                StockListHeader()
-                HorizontalDivider()
-                LazyColumn {
-                    items(tabItems, key = { it.code }) { result ->
-                        StockRow(result, onTap = { vm.openChart(result) })
-                        HorizontalDivider(color = Color(0xFFEEEEEE))
+            StockListHeader()
+            HorizontalDivider()
+            // HorizontalPager 支援左右滑動切換分頁
+            HorizontalPager(
+                state    = pagerState,
+                modifier = Modifier.weight(1f),
+            ) { page ->
+                val group     = groups[page]
+                val tabItems  = if (group == PriceGroup.ALL) results
+                                else results.filter { it.priceGroup() == group }
+                if (tabItems.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Text("此價位區間無標的", color = Color.Gray, fontSize = 14.sp)
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(tabItems, key = { it.code }) { result ->
+                            StockRow(result, onTap = { vm.openChart(result) })
+                            HorizontalDivider(color = Color(0xFFEEEEEE))
+                        }
                     }
                 }
             }
@@ -346,6 +363,7 @@ private fun ScanDialog(
     var useCustomDate   by remember { mutableStateOf(false) }
     var customDate      by remember { mutableStateOf<LocalDate?>(null) }
     var showDatePicker  by remember { mutableStateOf(false) }
+    var buildingCombo   by remember { mutableStateOf(listOf<String>()) }
 
     val tpe            = ZoneId.of("Asia/Taipei")
     val lastTradeDate  = remember { lastCompleteTradeDate(ZonedDateTime.now(tpe)) }
@@ -386,7 +404,7 @@ private fun ScanDialog(
                     // ── 預設組合（多選） ──────────────────────────
                     Text("選擇組合", fontSize = 13.sp, color = Color.Gray)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Preset.entries.forEach { preset ->
+                        Preset.entries.filter { it.hasCombo }.forEach { preset ->
                             val selected = preset in dialogPresets
                             FilterChip(
                                 selected = selected,
@@ -399,10 +417,11 @@ private fun ScanDialog(
                                 label  = { Text(preset.label, fontSize = 13.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = when (preset) {
-                                        Preset.LONG3_LEAN, Preset.LONG_TREND ->
-                                            GreenStrong.copy(alpha = 0.15f)
+                                        Preset.LONG3_LEAN, Preset.LONG3_PATTERN,
+                                        Preset.LONG_MOMENTUM, Preset.LONG_TREND ->
+                                            ColorUp.copy(alpha = 0.15f)
                                         Preset.SHORT3_LEAN ->
-                                            RedStrong.copy(alpha = 0.15f)
+                                            ColorDown.copy(alpha = 0.15f)
                                     }
                                 )
                             )
@@ -416,9 +435,9 @@ private fun ScanDialog(
                         verticalAlignment     = Alignment.CenterVertically,
                     ) {
                         Text("多方訊號", fontSize = 13.sp, color = Color.Gray)
-                        if (customSigs.isNotEmpty()) {
+                        if (customSigs.any { !it.contains("+") }) {
                             TextButton(
-                                onClick      = { customSigs = emptySet() },
+                                onClick      = { customSigs = customSigs.filter { it.contains("+") }.toSet() },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             ) { Text("清除", fontSize = 12.sp) }
                         }
@@ -455,6 +474,63 @@ private fun ScanDialog(
                                     selectedLabelColor     = RedStrong,
                                 ),
                             )
+                        }
+                    }
+                    HorizontalDivider()
+
+                    // ── 自訂組合 ──────────────────────────────────
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment     = Alignment.CenterVertically,
+                    ) {
+                        Text("自訂組合", fontSize = 13.sp, color = Color.Gray)
+                        if (buildingCombo.isNotEmpty()) {
+                            TextButton(
+                                onClick        = { buildingCombo = emptyList() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) { Text("清除", fontSize = 12.sp) }
+                        }
+                    }
+                    // 小型訊號選擇器（只顯示代碼，點選加入建立中的組合）
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (LONG_SIGNAL_DEFS + SHORT_SIGNAL_DEFS).forEach { (sig, _) ->
+                            val inCombo = sig in buildingCombo
+                            FilterChip(
+                                selected = inCombo,
+                                onClick  = {
+                                    buildingCombo = if (inCombo) buildingCombo - sig else buildingCombo + sig
+                                },
+                                label  = { Text(sig, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    selectedLabelColor     = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        }
+                    }
+                    // 新增按鈕（≥2 個訊號才顯示）
+                    if (buildingCombo.size >= 2) {
+                        Button(
+                            onClick = {
+                                customSigs = customSigs + buildingCombo.joinToString("+")
+                                buildingCombo = emptyList()
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Text("＋  新增  ${buildingCombo.joinToString("+")}", fontSize = 13.sp)
+                        }
+                    }
+                    // 已建立的組合（可點擊刪除）
+                    val existingCombos = customSigs.filter { it.contains("+") }.sorted()
+                    if (existingCombos.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            existingCombos.forEach { combo ->
+                                SuggestionChip(
+                                    onClick = { customSigs = customSigs - combo },
+                                    label   = { Text("$combo  ×", fontSize = 11.sp) },
+                                )
+                            }
                         }
                     }
                 }
@@ -607,9 +683,9 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
             Spacer(Modifier.width(6.dp))
 
             Column(Modifier.weight(1.8f)) {
-                Text(result.code, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                Text(result.code, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                     maxLines = 1)
-                Text(result.name, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                Text(result.name, fontSize = 17.sp, fontWeight = FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(
@@ -638,9 +714,10 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
         // ── MA 標注 ───────────────────────────────────────────────
         if (result.ma5 > 0) {
             MaRow(price = quote.price,
-                  ma5 = result.ma5,   ma5Dir  = result.ma5Dir,
-                  ma10 = result.ma10, ma10Dir = result.ma10Dir,
-                  ma20 = result.ma20, ma20Dir = result.ma20Dir)
+                  ma5 = result.ma5,   ma5Dir   = result.ma5Dir,
+                  ma10 = result.ma10, ma10Dir  = result.ma10Dir,
+                  ma20 = result.ma20, ma20Dir  = result.ma20Dir,
+                  ma20Trend = result.ma20Trend)
         }
 
         // ── 命中標籤 ──────────────────────────────────────────────
@@ -668,11 +745,19 @@ private fun StockRow(result: SignalResult, onTap: () -> Unit = {}) {
 @Composable
 private fun MaRow(
     price: Double,
-    ma5: Double,   ma5Dir:  Int,
-    ma10: Double,  ma10Dir: Int,
-    ma20: Double,  ma20Dir: Int,
+    ma5: Double,   ma5Dir:   Int,
+    ma10: Double,  ma10Dir:  Int,
+    ma20: Double,  ma20Dir:  Int,
+    ma20Trend: Int = 0,
 ) {
     fun arrow(dir: Int) = if (dir > 0) "↑" else if (dir < 0) "↓" else "→"
+
+    // MA20 趨勢標籤
+    val (trendLabel, trendColor, trendBg) = when (ma20Trend) {
+        1    -> Triple("上升▲", ColorUp,    ColorUp.copy(alpha = 0.12f))
+        -1   -> Triple("下降▼", ColorDown,  ColorDown.copy(alpha = 0.12f))
+        else -> Triple("橫盤─", Color.Gray, Color.Gray.copy(alpha = 0.12f))
+    }
 
     Row(
         Modifier.padding(start = 20.dp, top = 2.dp),
@@ -693,6 +778,17 @@ private fun MaRow(
                     Text("%.1f".format(ma), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = color)
                 }
             }
+
+        // 趨勢標籤 chip
+        Text(
+            text = trendLabel,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = trendColor,
+            modifier = Modifier
+                .background(trendBg, shape = RoundedCornerShape(3.dp))
+                .padding(horizontal = 4.dp, vertical = 1.dp),
+        )
     }
 }
 
