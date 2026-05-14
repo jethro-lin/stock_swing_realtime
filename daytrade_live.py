@@ -48,6 +48,7 @@ import subprocess
 import contextlib
 from collections import defaultdict
 
+import numpy as np
 import pandas as pd
 
 try:
@@ -231,18 +232,27 @@ def check_and_alert(code: str, name: str, sigs: dict,
     now_t = time.monotonic()
     last  = _alert_state.get(code)          # None = 從未警報
 
+    # 方向邊際：多空差值；差值 < 2 視為模糊，不允許反轉觸發
+    margin = abs(long_h - short_h)
+
     if last is None:
         fire = True                          # 首次達門檻
-    elif last["direction"] != direction:
-        fire = True                          # 方向反轉
-    elif last["active"] != active and (now_t - last["ts"]) >= ALERT_COOLDOWN_SEC:
-        fire = True                          # 訊號變化 + 冷卻已過
+    elif last["direction"] != direction and margin >= 2:
+        fire = True                          # 方向反轉（需邊際 ≥ 2，避免單一臨界訊號抖動）
+    elif last["direction"] == direction and last["active"] != active \
+            and (now_t - last["ts"]) >= ALERT_COOLDOWN_SEC:
+        fire = True                          # 同方向，訊號變化 + 冷卻已過
     else:
-        fire = False                         # 冷卻期內，同方向同（或類似）訊號 → 忽略
+        fire = False                         # 冷卻期內，或邊際不足 → 忽略
 
     if fire:
         _alert_state[code] = {"active": active, "direction": direction, "ts": now_t}
-        sig_str = " ".join(sorted(active))
+        # Bug fix: sig_str 只顯示與方向一致的訊號（多→非S結尾；空→S結尾）
+        if direction == "多":
+            dir_active = [k for k in active if not k.endswith("S")]
+        else:
+            dir_active = [k for k in active if k.endswith("S")]
+        sig_str = " ".join(sorted(dir_active))
         ts      = datetime.datetime.now().strftime("%H:%M:%S")
         msg     = f"{ts} {code} {name} {direction} [{sig_str}] 現價={price:.2f}"
         notify_signal(code, name, direction, price, active)
@@ -263,6 +273,110 @@ def _calc_rsi(series: pd.Series, period: int = RSI_PERIOD) -> float:
     rsi   = 100 - 100 / (1 + rs)
     val   = rsi.iloc[-1]
     return float(val) if not pd.isna(val) else 50.0
+
+
+def _detect_neckline_patterns(df: pd.DataFrame, i: int) -> tuple:
+    """
+    在第 i 根 K 棒偵測 W底（T多）和 M頭（TS空）頸線型態。
+    回傳 (w_bottom: bool, m_top: bool)
+
+    突破首日條件：昨收在頸線另一側 → 避免同一型態連續多天重複觸發。
+    MIN_SPAN：兩低/高點最小間距 5 根，排除過窄噪音型態。
+    MIN_NECK_PCT：頸線需有實質幅度（至少 1%）。
+    """
+    LOOKBACK     = 60
+    SIMILARITY   = 0.05
+    RECENCY      = 20
+    WIN          = 3
+    MIN_SPAN     = 5
+    MIN_NECK_PCT = 0.01
+
+    start = max(0, i - LOOKBACK)
+    sub   = df.iloc[start : i + 1].reset_index(drop=True)
+    n     = len(sub)
+
+    if n < WIN * 2 + 5:
+        return False, False
+
+    hi_arr   = sub["High"].values.astype(float)
+    lo_arr   = sub["Low"].values.astype(float)
+    cl_arr   = sub["Close"].values.astype(float)
+    today_cl = cl_arr[-1]
+    prev_cl  = cl_arr[-2] if n >= 2 else today_cl
+    today_i  = n - 1
+
+    def find_swings(arr: np.ndarray, is_min: bool) -> list:
+        result = []
+        for j in range(WIN, today_i - WIN):
+            window = arr[j - WIN : j + WIN + 1]
+            if is_min and arr[j] == window.min():
+                result.append((j, arr[j]))
+            elif not is_min and arr[j] == window.max():
+                result.append((j, arr[j]))
+        return result
+
+    lows  = find_swings(lo_arr, True)
+    highs = find_swings(hi_arr, False)
+
+    # W底多（T）
+    w_bottom = False
+    if len(lows) >= 2:
+        for a in range(len(lows) - 1):
+            if w_bottom:
+                break
+            for b in range(a + 1, len(lows)):
+                i1, v1 = lows[a]
+                i2, v2 = lows[b]
+                if today_i - i2 > RECENCY:
+                    continue
+                if i2 - i1 < MIN_SPAN:
+                    continue
+                if abs(v1 - v2) / max(v1, v2) > SIMILARITY:
+                    continue
+                between_highs = [hv for (hi_i, hv) in highs if i1 < hi_i < i2]
+                if between_highs:
+                    neckline = max(between_highs)
+                elif i2 > i1 + 1:
+                    neckline = hi_arr[i1 + 1 : i2].max()
+                else:
+                    continue
+                if neckline < (v1 + v2) / 2 * (1 + MIN_NECK_PCT):
+                    continue
+                # ★ 突破首日
+                if today_cl > neckline and prev_cl <= neckline:
+                    w_bottom = True
+                    break
+
+    # M頭空（TS）
+    m_top = False
+    if len(highs) >= 2:
+        for a in range(len(highs) - 1):
+            if m_top:
+                break
+            for b in range(a + 1, len(highs)):
+                i1, v1 = highs[a]
+                i2, v2 = highs[b]
+                if today_i - i2 > RECENCY:
+                    continue
+                if i2 - i1 < MIN_SPAN:
+                    continue
+                if abs(v1 - v2) / max(v1, v2) > SIMILARITY:
+                    continue
+                between_lows = [lv for (lo_i, lv) in lows if i1 < lo_i < i2]
+                if between_lows:
+                    neckline = min(between_lows)
+                elif i2 > i1 + 1:
+                    neckline = lo_arr[i1 + 1 : i2].min()
+                else:
+                    continue
+                if neckline > (v1 + v2) / 2 * (1 - MIN_NECK_PCT):
+                    continue
+                # ★ 跌破首日
+                if today_cl < neckline and prev_cl >= neckline:
+                    m_top = True
+                    break
+
+    return w_bottom, m_top
 
 
 def build_base(hist_df: pd.DataFrame) -> dict | None:
@@ -396,6 +510,9 @@ def build_base(hist_df: pd.DataFrame) -> dict | None:
         ib_prev2_h = ib_prev2_l = 0.0
         ib_is_inside = False
 
+    # ── T/TS：頸線型態（W底/M頭）──────────────────
+    neckline_t, neckline_ts = _detect_neckline_patterns(df, len(df) - 1)
+
     return {
         "avg5":          avg5,
         "avg20_vol":     avg20_vol,
@@ -439,6 +556,9 @@ def build_base(hist_df: pd.DataFrame) -> dict | None:
         # ── Q/QS ──
         "ib_prev2_h":    ib_prev2_h,  "ib_prev2_l":  ib_prev2_l,
         "ib_is_inside":  ib_is_inside,
+        # ── T/TS ──
+        "neckline_t":    neckline_t,
+        "neckline_ts":   neckline_ts,
     }
 
 
@@ -449,7 +569,7 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
     盤中策略判斷。所有技術指標基準來自 build_base()，盤中不重算。
     price / open_p / chg_pct / high_p / low_p 均為即時資料。
 
-    策略對照（與 swing_trade_v2.py 一致，共 37 個）：
+    策略對照（與 swing_trade_v2.py 一致，共 39 個）：
       A/AS   均線突破/死亡         B/BS   開盤跳空缺口
       C/CS   RSI 超賣/超買反轉     D/DS   突破/跌破近 5 日高低
       E/ES   強勢連漲/弱勢連跌     F/FS   均量擴張/萎縮
@@ -460,12 +580,13 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
       O/OS   晨星 / 黃昏之星       P/PS   紅三兵 / 黑三兵
       Q/QS   Inside Bar 突破/跌破  R/RS   BIAS 超跌反彈/超漲回落
       B2     大跳空(≥5%)+低量(≥0.8x)
+      T/TS   頸線型態 W底突破/M頭跌破（60根K棒內，相似度<5%）
     ★ 多方策略 A/B/D/F/G 已移除爆量條件（量多反而降低多方 EV）
     """
     ALL_KEYS = ["A","AS","B","BS","C","CS","D","DS","E","ES",
                 "F","FS","G","GS","H","HS","I","IS",
                 "J","JS","K","KS","L","LS","M","MS",
-                "N","NS","O","OS","P","PS","Q","QS","R","RS","B2"]
+                "N","NS","O","OS","P","PS","Q","QS","R","RS","B2","T","TS"]
     empty = {k: False for k in ALL_KEYS}
     if price == 0:
         return empty
@@ -618,6 +739,9 @@ def check_signals(base: dict, price: float, open_p: float, chg_pct: float,
         "RS": bool(bias > +10 and chg_pct < 0),
         # ── B2：大跳空(≥5%) + 量比≥0.8x ─────────────
         "B2": bool(gap_pct >= 5.0 and vol_ratio >= 0.8 and chg_pct > 0),
+        # ── T/TS：頸線型態 W底/M頭（預算於 build_base）─
+        "T":  bool(base.get("neckline_t",  False)),
+        "TS": bool(base.get("neckline_ts", False)),
     }
 
 

@@ -139,6 +139,9 @@ STRATEGY_NAMES = {
     "R":  "多 BIAS超跌反彈",    "RS": "空 BIAS超漲回落",
     # ── 大跳空低量（新增）──
     "B2": "多 大跳空(≥5%)+低量(≥0.8x)",
+    # ── 頸線型態（新增）──
+    "T":  "多 W底頸線突破",
+    "TS": "空 M頭頸線跌破",
 }
 
 # 預先建立策略順序索引（向量化與多執行緒共用）
@@ -154,8 +157,8 @@ _N_STRATS   = len(_STRAT_KEYS)
 SIGNAL_CATEGORIES: list[tuple[str, str, list[str]]] = [
     # (類別名稱, 英文名, [訊號碼...])
     ("① 缺口動能", "Gap Momentum",          ["B", "B2", "BS"]),
-    ("② 超賣反轉", "Oversold Reversal",      ["R", "K", "L", "M", "C",
-                                               "RS", "KS", "LS", "MS", "CS"]),
+    ("② 超賣反轉", "Oversold Reversal",      ["R", "K", "L", "M", "C", "T",
+                                               "RS", "KS", "LS", "MS", "CS", "TS"]),
     ("③ 趨勢延續", "Trend Following",        ["A", "N", "F",
                                                "AS", "NS", "FS"]),
     ("④ 動能突破", "Momentum Breakout",      ["D", "E",
@@ -203,6 +206,8 @@ SIGNAL_COND: dict[str, str] = {
     "QS": "InsideBar 跌破（前日內包，今日向下跌破），MA5<MA20",
     "R":  "BIAS<−10%（超跌，收盤偏離 MA20 超過 10%）",
     "RS": "BIAS>+10%（超漲，收盤偏離 MA20 超過 10%）",
+    "T":  "W底頸線突破：60根K棒內找兩個相近低點（差距<5%），收盤突破頸線（兩低點間高點）",
+    "TS": "M頭頸線跌破：60根K棒內找兩個相近高點（差距<5%），收盤跌破頸線（兩高點間低點）",
     "A":  "MA5>MA20（多頭排列），昨收>前日收（上漲）",
     "AS": "MA5<MA20（空頭排列），爆量（≥1.5x均量），收跌",
 }
@@ -212,7 +217,7 @@ SIGNAL_COND: dict[str, str] = {
 # ══════════════════════════════════════════════════════════════
 # 均值回歸：超賣/逆勢型，short hold（exit-day=3）
 _REVERSION_SIGS = frozenset({
-    "C","CS","H","HS","I","IS","K","KS","L","LS","M","MS","O","OS","R","RS"
+    "C","CS","H","HS","I","IS","K","KS","L","LS","M","MS","O","OS","R","RS","T","TS"
 })
 # 趨勢跟風：順勢/動能型，long hold（exit-day=15）
 _TREND_SIGS = frozenset({
@@ -1660,6 +1665,10 @@ def fetch_data_sinopac(codes: list, days: int,
     _open_tw     = _now_tw.replace(hour=9,  minute=0,  second=0, microsecond=0)
     _close_tw    = _now_tw.replace(hour=13, minute=30, second=0, microsecond=0)
     _market_open = (_open_tw <= _now_tw < _close_tw)
+    # TWSE 通常 14:00 後才有完整當日資料；14:30 後確認可安全取今日
+    # （與 fetch_data_twse 的邊界邏輯一致）
+    _twse_close  = _now_tw.replace(hour=14, minute=30, second=0, microsecond=0)
+    _twse_ready  = (_now_tw >= _twse_close)   # 盤後且 TWSE 已更新完畢
 
     # 歷史區間（kbars 不含當日盤中，故 end = 昨日）
     buf        = days + 40
@@ -1885,9 +1894,11 @@ def fetch_data_sinopac(codes: list, days: int,
         with ThreadPoolExecutor(max_workers=_tw) as pool:
             list(pool.map(_fetch_task, tasks))
 
+        # 盤後且 TWSE 已更新（14:30 後）→ 允許讀取今日資料；盤中仍截至昨日
+        _fb_end = _today_tw if _twse_ready else hist_end
         official_ok = 0
         for code in fallback_codes:
-            df_off = _rows_to_df(_code_rows.get(code, []), hist_start, hist_end)
+            df_off = _rows_to_df(_code_rows.get(code, []), hist_start, _fb_end)
             if df_off is not None and len(df_off) >= 5:
                 results[code] = df_off
                 official_ok += 1
@@ -2045,6 +2056,120 @@ def _williams_r(high: pd.Series, low: pd.Series, close: pd.Series,
     hi = high.rolling(period).max()
     lo = low.rolling(period).min()
     return ((hi - close) / (hi - lo).replace(0, float("nan")) * -100).fillna(-50)
+
+
+def _detect_neckline_patterns(df: pd.DataFrame, i: int) -> tuple:
+    """
+    在第 i 根 K 棒偵測 W底（多方）和 M頭（空方）頸線型態。
+    回傳 (w_bottom: bool, m_top: bool)
+
+    演算法：
+    - 往回看 LOOKBACK 根 K 棒
+    - 用 WIN 根滑動窗口找局部高低點
+    - W底：兩個相近低點（差距 ≤ SIMILARITY），今日收盤突破頸線 且 昨日收盤在頸線下
+           （突破首日條件：避免同一型態重複觸發多天）
+    - M頭：兩個相近高點（差距 ≤ SIMILARITY），今日收盤跌破頸線 且 昨日收盤在頸線上
+    - 頸線需有實質意義：至少比平均低點高 MIN_NECK_PCT%（W底）
+    - 兩低/高點最小間距 MIN_SPAN 根（排除噪音）
+    - 第二個低/高點需在最近 RECENCY 根 K 棒內（避免型態過舊）
+    """
+    LOOKBACK     = 60    # 最多往回看 60 根 K 棒
+    SIMILARITY   = 0.05  # 兩個低/高點差距 ≤ 5%
+    RECENCY      = 20    # 第二個低/高點需在最近 20 根 K 棒內
+    WIN          = 3     # 局部高低點滑動窗口（前後各 WIN 根）
+    MIN_SPAN     = 5     # 兩低/高點最小間距（根），避免過窄型態
+    MIN_NECK_PCT = 0.01  # 頸線需比平均低點高 ≥ 1%（W底）/ 比平均高點低 ≥ 1%（M頭）
+
+    start = max(0, i - LOOKBACK)
+    sub   = df.iloc[start : i + 1].reset_index(drop=True)
+    n     = len(sub)
+
+    if n < WIN * 2 + 5:
+        return False, False
+
+    hi_arr   = sub["High"].values.astype(float)
+    lo_arr   = sub["Low"].values.astype(float)
+    cl_arr   = sub["Close"].values.astype(float)
+    today_cl = cl_arr[-1]
+    prev_cl  = cl_arr[-2] if n >= 2 else today_cl
+    today_i  = n - 1
+
+    def find_swings(arr: np.ndarray, is_min: bool) -> list:
+        """回傳 (index, value) 局部極值清單（排除最後一根，那是今日）"""
+        result = []
+        for j in range(WIN, today_i - WIN):
+            window = arr[j - WIN : j + WIN + 1]
+            if is_min and arr[j] == window.min():
+                result.append((j, arr[j]))
+            elif not is_min and arr[j] == window.max():
+                result.append((j, arr[j]))
+        return result
+
+    lows  = find_swings(lo_arr, True)
+    highs = find_swings(hi_arr, False)
+
+    # ── W底多（T）────────────────────────────────────────────────────
+    w_bottom = False
+    if len(lows) >= 2:
+        for a in range(len(lows) - 1):
+            if w_bottom:
+                break
+            for b in range(a + 1, len(lows)):
+                i1, v1 = lows[a]
+                i2, v2 = lows[b]
+                if today_i - i2 > RECENCY:
+                    continue
+                if i2 - i1 < MIN_SPAN:                      # ★ 間距過窄排除
+                    continue
+                if abs(v1 - v2) / max(v1, v2) > SIMILARITY:
+                    continue
+                # 找兩低點之間的最高點（頸線）
+                between_highs = [hv for (hi_i, hv) in highs if i1 < hi_i < i2]
+                if between_highs:
+                    neckline = max(between_highs)
+                elif i2 > i1 + 1:
+                    neckline = hi_arr[i1 + 1 : i2].max()
+                else:
+                    continue
+                # ★ 頸線需比平均低點高至少 MIN_NECK_PCT（確保 W 有足夠幅度）
+                if neckline < (v1 + v2) / 2 * (1 + MIN_NECK_PCT):
+                    continue
+                # ★ 突破首日：昨日在頸線下，今日突破（避免連續多天重複觸發）
+                if today_cl > neckline and prev_cl <= neckline:
+                    w_bottom = True
+                    break
+
+    # ── M頭空（TS）───────────────────────────────────────────────────
+    m_top = False
+    if len(highs) >= 2:
+        for a in range(len(highs) - 1):
+            if m_top:
+                break
+            for b in range(a + 1, len(highs)):
+                i1, v1 = highs[a]
+                i2, v2 = highs[b]
+                if today_i - i2 > RECENCY:
+                    continue
+                if i2 - i1 < MIN_SPAN:
+                    continue
+                if abs(v1 - v2) / max(v1, v2) > SIMILARITY:
+                    continue
+                # 找兩高點之間的最低點（頸線）
+                between_lows = [lv for (lo_i, lv) in lows if i1 < lo_i < i2]
+                if between_lows:
+                    neckline = min(between_lows)
+                elif i2 > i1 + 1:
+                    neckline = lo_arr[i1 + 1 : i2].min()
+                else:
+                    continue
+                if neckline > (v1 + v2) / 2 * (1 - MIN_NECK_PCT):
+                    continue
+                # ★ 跌破首日
+                if today_cl < neckline and prev_cl >= neckline:
+                    m_top = True
+                    break
+
+    return w_bottom, m_top
 
 
 def _check(df: pd.DataFrame, i: int,
@@ -2269,6 +2394,9 @@ def _check(df: pd.DataFrame, i: int,
     bias_oversold   = (bias < -10) and (chg_pct > 0)   # ★ -8→-10（EV +0.26%，樣本仍充足，見參數分析 2026-05-05）
     bias_overbought = (bias > +8) and (chg_pct < 0)
 
+    # ── 頸線型態（非向量化，逐根計算）───────────────────
+    w_neckline, m_neckline = _detect_neckline_patterns(df, i)
+
     return {
         # 原有十個
         # ★ 多方已移除爆量條件（量多反而降低多方 EV，見量比分析 2026-04-25）
@@ -2315,6 +2443,9 @@ def _check(df: pd.DataFrame, i: int,
         "RS": bool(bias_overbought),
         # 大跳空低量（新增）
         "B2": bool(gap >= 5.0 and vol_ratio >= 0.8 and chg_pct > 0),
+        # 頸線型態（新增，非向量化）
+        "T":  bool(w_neckline),
+        "TS": bool(m_neckline),
     }
 
 
@@ -2625,7 +2756,9 @@ def _precompute_signals_vec(sub: pd.DataFrame,
             _f(bias_oversold_v),                                                   # R
             _f(bias_overbought_v),                                                 # RS
             _f(b2_long_v),                                                         # B2
-        ])  # shape (n, 37), dtype bool
+            np.zeros(n, dtype=bool),                                               # T  (頸線W底，非向量化，回測階段保留佔位)
+            np.zeros(n, dtype=bool),                                               # TS (頸線M頭，非向量化，回測階段保留佔位)
+        ])  # shape (n, 39), dtype bool
 
     return sig
 
@@ -2790,6 +2923,8 @@ def run_scan(data: dict, min_hit: int, vol_mult: float,
             "R偏低多":  "✅" if sigs["R"]  else "❌",
             "RS偏高空": "✅" if sigs["RS"] else "❌",
             "B2大跳空": "✅" if sigs["B2"] else "❌",
+            "T頸線W底": "✅" if sigs["T"]  else "❌",
+            "TS頸線M頭":"✅" if sigs["TS"] else "❌",
             "命中數":    hit,
             "方向":      direction,
             "MA20方向":  ma20_label,
