@@ -842,7 +842,8 @@ def init_db() -> sqlite3.Connection:
         next_high   REAL,
         next_low    REAL,
         pnl_pct     REAL,                   -- 實際損益%（次日收盤）
-        created_at  TEXT DEFAULT (datetime('now','localtime'))
+        created_at  TEXT DEFAULT (datetime('now','localtime')),
+        UNIQUE (scan_date, code) ON CONFLICT REPLACE
     );
 
     CREATE TABLE IF NOT EXISTS backtests (
@@ -883,13 +884,32 @@ def init_db() -> sqlite3.Connection:
         ON kbars_daily(code, date);
     """)
     conn.commit()
+
+    # ── Migration：確保 scans 有 UNIQUE(scan_date, code) ──────────────
+    # 若現有 DB 無此 index（舊版建立），先清除重複資料再建立
+    has_idx = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_scans_unique_date_code'"
+    ).fetchone()
+    if not has_idx:
+        # 保留每組 (scan_date, code) 中 id 最大（最新）的那筆，刪除其餘重複
+        conn.execute("""
+            DELETE FROM scans
+            WHERE id NOT IN (
+                SELECT MAX(id) FROM scans GROUP BY scan_date, code
+            )
+        """)
+        conn.execute(
+            "CREATE UNIQUE INDEX idx_scans_unique_date_code ON scans(scan_date, code)"
+        )
+        conn.commit()
+
     return conn
 
 
 def save_scan(conn: sqlite3.Connection, scan_date: str, rows: list, min_hit: int):
-    """儲存選股結果到 scans 資料表"""
+    """儲存選股結果到 scans 資料表（同日同代號以最新掃描覆寫）"""
     conn.executemany("""
-        INSERT INTO scans
+        INSERT OR REPLACE INTO scans
             (scan_date, code, name, close, chg_pct, vol_k, vol_ratio,
              strategies, hit_count, direction, min_hit)
         VALUES (?,?,?,?,?,?,?,?,?,?,?)
