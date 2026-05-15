@@ -1454,7 +1454,12 @@ def load_kbars_cache(conn: sqlite3.Connection, codes: list,
                 columns=["code", "date", "Open", "High", "Low",
                          "Close", "Vol_K", "Volume"],
             )
-            df.index = pd.to_datetime(df["date"])
+            # errors='coerce'：格式錯誤的日期（如 "2022-06-0"）轉成 NaT 後丟棄
+            df.index = pd.to_datetime(df["date"], format="%Y-%m-%d", errors="coerce")
+            bad = df.index.isna().sum()
+            if bad:
+                print(f"  ⚠️  {code}: 丟棄 {bad} 筆日期格式錯誤的 K 棒資料")
+            df = df[df.index.notna()]
             df.index.name = None
             df = df.drop(columns=["code", "date"])
             results[code] = df
